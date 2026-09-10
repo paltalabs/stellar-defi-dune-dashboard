@@ -32,6 +32,16 @@ pierden si nadie los recuerda.
 4. Guardar el SQL en `queries/<protocolo>/<query_id>_<slug>.sql` con la cabecera estándar.
 5. Marcar el paso en `plan.md`. Commit.
 
+## Espejar el SQL al repo
+
+`scripts/mirror.py` baja el SQL de cada query de `queries.yml` por la API REST de Dune y escribe
+`queries/<protocolo>/<id>_<slug>.sql` con la cabecera. Necesita `DUNE_API_KEY` con permiso de
+lectura de queries. **Al 2026-09-10 las dos llaves que tenemos devolvieron `invalid API Key`
+en `GET /api/v1/query/{id}`** (la del MCP y la del dataroom), así que los espejos de hoy se
+escribieron a mano desde el texto enviado a Dune. Pendiente: generar en Dune una API key del
+team y probar de nuevo; hasta entonces, después de cada `updateDuneQuery` hay que copiar el SQL
+al archivo.
+
 ## Cabecera estándar de cada SQL
 
 ```

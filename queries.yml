@@ -1,0 +1,62 @@
+# Registro de las queries del proyecto en Dune. Es la fuente para `scripts/mirror.py`, que baja
+# el SQL de cada una y lo escribe en queries/<protocolo>/<id>_<slug>.sql con esta metadata como
+# cabecera. Cuando se mide una ejecución, se anota acá (costo, filas, fecha), no en el .sql.
+
+generated_at: 2026-09-10
+source: dune.com, team paltalabs
+
+queries:
+
+  # Capa viva por protocolo. Hoy con ventana fija de 45 días (paso 1 del plan); en el paso 3
+  # pasan a leer desde MAX(closed_at) del archive y se les crea la matview.
+  - id: 8666478
+    protocol: blend
+    slug: activity
+    layer: live
+    matview: null
+    cron: null
+    reads: [stellar.history_contract_events, stellar.contract_data]
+    measured: {date: 2026-09-10, credits: 6.73, rows: 138807, window: 45 days}
+  - id: 8666484
+    protocol: aquarius
+    slug: activity
+    layer: live
+    matview: null
+    cron: null
+    reads: [stellar.history_contract_events]
+    measured: {date: 2026-09-10, credits: 6.27, rows: 188771, window: 45 days}
+  - id: 8666498
+    protocol: soroswap
+    slug: activity
+    layer: live
+    matview: null
+    cron: null
+    reads: [stellar.history_contract_events, stellar.contract_data]
+    measured: {date: 2026-09-10, credits: 7.93, rows: 31598, window: 45 days}
+  - id: 8666499
+    protocol: phoenix
+    slug: activity
+    layer: live
+    matview: null
+    cron: null
+    reads: [stellar.history_contract_events, stellar.contract_data]
+    measured: {date: 2026-09-10, credits: 11.13, rows: 3506, window: 45 days}
+    note: la más cara por fila; dos caminos de parseo (formato viejo y nuevo) sobre 14 pools
+  - id: 8666504
+    protocol: fxdao
+    slug: activity
+    layer: live
+    matview: null
+    cron: null
+    reads: [stellar.history_operations, stellar.history_transactions]
+    measured: {date: 2026-09-10, credits: 0.08, rows: 0, window: 45 days}
+    note: cero filas porque no hubo actividad en la ventana; el join se verificó con 150 días (17 filas, sondeo 8666539)
+  - id: 8666506
+    protocol: etherfuse
+    slug: activity
+    layer: live
+    matview: null
+    cron: null
+    reads: [stellar.history_operations, stellar.history_transactions, stellar.history_trades]
+    measured: {date: 2026-09-10, credits: 6.70, rows: 895391, window: 45 days}
+    note: el 95% de las filas son trades de bots market maker en USTRY y CETES; se agrupan por cuenta, operación y par

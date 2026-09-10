@@ -38,7 +38,7 @@ Proyección con esos números:
 | **Total régimen** | | | **~950 cr/mes, 4% de la cuota** |
 | Alternativa: métricas cada 6 h como dice la submission | | 4 por día | ~+600 cr/mes |
 
-Gasto del proyecto hasta ahora: **52,8 cr** en 11 sondeos (todos temporales, ninguno programado).
+Gasto del proyecto hasta ahora: **103,5 cr**: 57,8 en 13 sondeos temporales y 45,6 en las seis queries de actividad del paso 1 (más un re-run de Etherfuse). Nada programado todavía.
 
 Tope acordado para la construcción del Entregable 1: **500 cr**. Los archives (~240) se corren
 uno por día. Si un archive mide más de 80 cr se para y se revisa antes de seguir.
@@ -58,17 +58,18 @@ dashboard público, verificable, y se actualiza sola.
 - [x] Pools: Blend 15 v1 + 12 v2 (storage de factories), Phoenix 14 (storage), Aquarius 400 (`data/`).
 - [x] Prototipos de 30 días de las seis queries de actividad, sin usuarios nulos.
 
-### Paso 1: queries de actividad, capa viva (estimado 30 cr)
+### Paso 1: queries de actividad, capa viva ✅ 2026-09-10, 45,6 cr (estimado 30)
 
 Una query por protocolo, no temporal, ventana `closed_at_date >= current_date - 45 días`, con el
-esquema normalizado. Se ejecuta, se mide, se guarda en `queries/<protocolo>/`. Todavía sin matview.
+esquema normalizado. Ejecutadas, medidas, espejadas en `queries/<protocolo>/`. Todavía sin matview.
+Registro con ids y costos: `queries.yml`.
 
-- [ ] Blend (pools desde storage de las 2 factories + 2 backstops)
-- [ ] Aquarius (3 routers)
-- [ ] Soroswap (pares desde storage de la factory + 10 aggregators)
-- [ ] Phoenix (pools desde storage de la factory, dos formatos de evento)
-- [ ] FxDAO (operaciones a vaults y locking pool)
-- [ ] Etherfuse (path payments, payments, trades del issuer)
+- [x] Blend 8666478: pools desde storage de las 2 factories + 2 backstops. 6,7 cr, 138.807 filas
+- [x] Aquarius 8666484: 3 routers. 6,3 cr, 188.771 filas
+- [x] Soroswap 8666498: router + 10 aggregators + pares directos sin router (desde storage de la factory). 7,9 cr, 31.598 filas
+- [x] Phoenix 8666499: pools desde storage de la factory, dos formatos de evento. 11,1 cr, 3.506 filas
+- [x] FxDAO 8666504: operaciones a vaults y locking pool. 0,1 cr, 0 filas en 45 días (join verificado a 150 días: 17 filas)
+- [x] Etherfuse 8666506: path payments, payments, offers y trades del issuer. 6,7 cr, 895.391 filas (bots de market making)
 
 ### Paso 2: archives, uno por día (estimado 240 cr) ⏸ requiere OK de Esteban
 
