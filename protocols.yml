@@ -1,0 +1,126 @@
+# Registro de contratos por protocolo. Fuente de verdad para las queries: los VALUES de cada
+# query se generan desde acá a mano y se anotan con la fecha. Cuando un protocolo despliega
+# algo nuevo se agrega acá primero.
+#
+# Verificado el 2026-09-10 contra el directorio de stellar.expert (https://stellar.expert/directory),
+# los docs oficiales de cada protocolo y los eventos de las factories en Dune (query 8666358).
+
+generated_at: 2026-09-10
+source: stellar.expert directory, docs.blend.capital, fxdao.io/docs/addresses, docs.aqua.network, soroswap aggregator repo, Dune factory events
+
+protocols:
+
+  blend:
+    kind: lending
+    docs: https://docs.blend.capital/mainnet-deployments
+    user_source: events            # topics [action, asset, from]; from = user
+    contracts:
+      pool_factory_v1: CCZD6ESMOGMPWH2KRO4O7RGTAPGTUPFWFQBELQSS7ZUK63V3TZWETGAG
+      pool_factory_v2: CDSYOAVXFY7SM5S64IZPPPYB4GVGGLMQVFREPSQQEZVIWXX5R23G4QSU
+      backstop_v1: CAO3AGAMZVRMHITL36EJ2VZQWKYRPWMQAPDQD5YEOF3GIF7T44U4JAL3
+      backstop_v2: CAQQR5SWBXKIGZKPBZDH3KM5GQ5GUTPKB7JAFCINLZBC5WXPJKRG3IM7
+      emitter: CCOQM6S7ICIUWA225O5PSJWUBEMXGFSSW2PQFO6FP4DQEKMS5DASRGRR
+      comet_blnd_usdc: CAS3FL6TLZKDGGSISDBWGGPXT3NRR4DYTZD7YOD3HMYO6LTJUVGRVEAM
+    pools:
+      # Los pools se descubren desde los eventos "deploy" de las dos factories, ver
+      # queries/blend/. Esta lista es la foto del directorio de stellar.expert al 2026-09-10.
+      - CCCCIQSDILITHMM7PBSLVDT5MISSY7R26MNZXCX4H7J5JQ5FPIYOGYFS   # Fixed v2 (USDC/XLM)
+      - CAE7QVOMBLZ53CDRGK3UNRRHG5EZ5NQA7HHTFASEMYBWHG6MDFZTYHXC   # Orbit (XLM/oUSD)
+      - CAJJZSGMMM3PD7N33TAPHGBUGTB43OC73HVIK2L2G6BNGGGYOSSYBXBD
+      - CBP7NO6F7FRDHSOFQBT2L2UWYIZ2PU76JKVRYAQTG3KZSQLYAOKIF2WB   # YieldBlox v1
+      - CBYOBT7ZCCLQCBUYYIABZLSEGDPEUWXCUXQTZYOG3YBDR7U357D5ZIRF
+      - CDE65QK2ROZ32V2LVLBOKYPX47TYMYO37Z6ASQTBRTBNK53C7C6QF4Y7
+      - CDMAVJPFXPADND3YRL4BSM3AKZWCTFMX27GLLXCML3PD62HEQS5FPVAI
+      - CDVQVKOY2YSXS2IC7KN6MNASSHPAO7UN2UR2ON4OI2SKMFJNVAMDX6DP   # Fixed v1 (XLM/USDC)
+    roles:
+      lender: [supply, withdraw, supply_collateral, withdraw_collateral]
+      borrower: [borrow, repay]
+      liquidator: [fill_auction]
+      backstop_provider: [backstop.deposit, backstop.withdraw, backstop.queue_withdrawal]
+
+  fxdao:
+    kind: cdp_stablecoin
+    docs: https://www.fxdao.io/docs/addresses/
+    user_source: operations        # los contratos casi no emiten eventos; se usa history_operations (source_account, function)
+    contracts:
+      vaults: CCUN4RXU5VNDHSF4S4RKV4ZJYMX2YWKOH6L4AKEKVNVDQ7HY5QIAO4UB
+      locking_pool: CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP
+      oracle: CB5OTV4GV24T5USEZHFVYGC3F4A4MPUQ3LN56E76UK2IT7MJ6QXW4TFS
+    assets:
+      issuer: GAVH5ZWACAY2PHPUG4FL3LHHJIYIHOFPSIUGM2KHK25CJWXHAV6QKDMN
+      usdx_sac: CDIKURWHYS4FFTR5KOQK6MBFZA2K3E26WGBQI6PXBYWZ4XIOPJHDFJKP
+      eurx_sac: CBN3NCJSMOQTC6SPEYK3A44NU4VS3IPKTARJLI3Y77OH27EWBY36TP7U
+      gbpx_sac: CBCO65UOWXY2GR66GOCMCN6IU3Y45TXCPBY3FLUNL4AOUMOCKVIVV6JC
+      fxg_sac: CDBR4FMYL5WPUDBIXTBEBU2AFEYTDLXVOTRZHXS3JC575C7ZQRKYZQ55
+    note: >
+      En 30 días (ago-sep 2026) no hubo invocaciones a vaults ni locking_pool. El protocolo está
+      casi inactivo; se cubre igual, con costo marginal, y se dice en el dashboard.
+
+  soroswap:
+    kind: amm_and_aggregator
+    docs: https://docs.soroswap.finance
+    user_source: events            # SoroswapPair swap/deposit/withdraw (to), SoroswapRouter swap, SoroswapAggregator swap
+    contracts:
+      factory: CA4HEQTL2WPEUYKYKCDOHCDNIV4QHNJ7EL4J4NQ6VADP7SYHVRYZ7AW2
+      router: CAG5LRYQ5JVEUI5TEID72EYOVX44TTUJT5BQR2J6J77FH65PCCFAJDDH
+    aggregator_versions:           # todas emiten eventos, todas cuentan
+      - CCHCH6XVKTMKTYCTKKTKNE2TFP5CMORNY77TA6XSRAD2XM7I2SJBUH3H
+      - CC2CMNKAFI3KKL6ROMIYJKKX2WE2MV5QAF7DZDWC57ENHV6DQTHT3W64
+      - CBFAORZNK4JSCJYT3ZLWFQ5QEI4IHOIYY6XCYT3E47AK6ZMZFKFP6ZKA
+      - CACITNMTUSTZYKKH4TJVXNH4C4XHGYFVAPQ2EE3D5LTL3HIA32QY4Q6X
+      - CDPJAUHPMJBOPUHBWBHO7NKSTR6J5EXZZ2OX4QGSXIHEJLBDY2JABM3L
+      - CCXNPJPNWT4WDWKTUNRPKNUHFYKZW6XBJAOHKAW2KLY5PBBGX6ZCFUJC
+      - CAWTTRKV7N4MBFSFU7BBZVMOAFEVYMZEDUS4ULBGUQH5YMFKPOFUWPF3
+      - CCWLXIBMONXFCXELPFHXPT4VSXKUSSP67DXNXWQ4YIPFGNBHQWEX4W4P
+      - CDEM2W2D2SC7VU3NOCIKHZWCUNCAUWI5GUGHSWBJNBENRHSVIMUT6EM2
+      - CAYP3UWLJM7ZPTUKL6R6BFGTRWLZ46LRKOXTERI2K6BIJAWGYY62TXTO   # actual (2025-06-16)
+    pairs: discovered from factory storage, see dune.paltalabs.result_soroswap_pools_filtered_tokens (paltalabs/dune-dashboards)
+    aggregator_protocol_ids: {0: soroswap, 1: phoenix, 2: aquarius, 3: comet}
+
+  aquarius:
+    kind: amm
+    docs: https://docs.aqua.network/developers/aquarius-soroban-functions
+    user_source: events            # el ROUTER emite swap/deposit/withdraw/claim con topics [action, tokens, user]
+    contracts:
+      router: CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK
+      router_2: CA7RQDMMV6E53P5EDZA5GPWBZ33AMW2ZNO42XLI2RGRIAP4QXIARUOJQ
+      router_3: CB4YHF4ESRJ4XZRXISLXSUZTYY6YPBPZ73MZWSTUWY46DKYW7IGLHGF7   # emite charge_provider_fee
+      fee_collector: CB6PKQLKIIEDR3IQNGOMMSNHNS6H3L4T4T5P33FYLG7A3UZIFR4XLY4C
+    pools: not needed for users; the pool address travels in the event data. Pool registry from add_pool events if T3 needs it.
+
+  phoenix:
+    kind: amm
+    docs: https://docs.soroswap.finance/soroswap-aggregator/technical-reference/other-amms-in-soroban/02-phoenix
+    user_source: events            # cada pool emite N eventos por acción con topics ["swap","sender"], ["provide_liquidity","sender"], ["withdraw_liquidity","sender"]
+    contracts:
+      factory: CB4SVAWJA6TSRNOJZ7W2AWFW46D5VR4ZMFZKDIKXEINZCZEGZCJZCKMI
+    pools:
+      # Directorio stellar.expert al 2026-09-10; la lista completa sale de la factory.
+      - CBHCRSVX3ZZ7EGTSYMKPEFGZNWRVCSESQR3UABET4MIW52N4EVU6BIZX   # XLM/USDC
+      - CB5QUVK5GS3IU23TMFZQ3P5J24YBBZP5PHUQAEJ2SP5K55PFTJRUQG2L
+      - CBCZGGNOEUZG4CAAE7TGTQQHETZMKUT4OIPFHHPKEUX46U4KXBBZ3GLH
+      - CBISULYO5ZGS32WTNCBMEFCNKNSLFXCQ4Z3XHVDP4X4FLPSEALGSY3PS
+      - CBW5G5SO5SDYUGQVU7RMZ2KJ34POM3AMODOBIV2RQYG4KJDUUBVC3P2T
+      - CC6MJZN3HFOJKXN42ANTSCLRFOMHLFXHWPNAX64DQNUEBDMUYMPHASAV
+      - CCKOC2LJTPDBKDHTL3M5UO7HFZ2WFIHSOKCELMKQP3TLCIVUBKOQL4HB
+      - CCUCE5H5CKW3S7JBESGCES6ZGDMWLNRY3HOFET3OH33MXZWKXNJTKSM3
+      - CD5XNKK3B6BEF2N7ULNHHGAMOKZ7P6456BFNIHRF4WNTEDKBRWAE7IAA
+      - CDMXKSLG5GITGFYERUW2MRYOBUQCMRT2QE5Y4PU3QZ53EBFWUXAXUTBC
+      - CDQLKNH3725BUP4HPKQKMM7OO62FDVXVTO7RCYPID527MZHJG2F3QBJW
+
+  etherfuse:
+    kind: rwa_stablebonds
+    docs: https://etherfuse.com
+    user_source: classic           # los stablebonds son assets clásicos; usuario = cuenta que envía/recibe/tradea el asset
+    issuer: GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC
+    oracle: CBWUSO5XZICR4FPKAQ4YDIYNZ2T26QMKUHWOSMPMWTXHFP3SJTAXGNCK
+    assets: [CETES, USTRY, TESOURO, EUROB, GILTS, KTB, MEX, MEXe]
+    sac:
+      CETES: CAL6ER2TI6CTRAY6BFXWNWA7WTYXUXTQCHUBCIBU5O6KM3HJFG6Z6VXV
+      USTRY: CBLV4ATSIWU67CFSQU2NVRKINQIKUZ2ODSZBUJTJ43VJVRSBTZYOPNUR
+    roles:
+      holder_in: [payment received, path payment received, SAC transfer received]
+      holder_out: [payment sent]
+      trader: [trade on SDEX with the asset]
+    note: >
+      Mint y redeem pasan por el issuer: un payment desde GCRYUGD5... es un mint, hacia él es un redeem.
