@@ -2,6 +2,9 @@
 # el SQL de cada una y lo escribe en queries/<protocolo>/<id>_<slug>.sql con esta metadata como
 # cabecera. Cuando se mide una ejecución, se anota acá (costo, filas, fecha), no en el .sql.
 
+# 2026-09-22: desde la Fase 1 el registro de ids, matviews, crons y costos de todas las piezas
+# es pilot.json (lo mantiene scripts/deploy_pilot.py). Las queries de abajo (paso 1) pasaron a ser
+# la capa viva result_scf_<p>_activity; su SQL actual está en queries/<protocolo>/<id>_activity.sql.
 generated_at: 2026-09-10
 source: dune.com, team paltalabs
 

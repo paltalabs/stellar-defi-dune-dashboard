@@ -13,9 +13,9 @@ Dashboard: https://dune.com/paltalabs/stellar-defi, privado hasta revisión (pil
 | `docs/modelo-de-datos.md` | El esquema único de actividad y cómo se saca el usuario en cada protocolo |
 | `docs/runbook.md` | Cómo reconstruir y operar todo en Dune, sin pasos manuales recurrentes |
 | `queries/<protocolo>/` | Espejo de cada query de Dune, con costo medido en la cabecera |
-| `queries/pilot/`, `pilot.json` | Piloto T1: SQL de cada pieza, ids, ejecuciones, costos y visualizaciones |
-| `scripts/` | `pilot_sql.py` genera el SQL, `deploy_pilot.py` lo despliega, `dune_mcp.py` habla con Dune |
-| `.github/workflows/` | Re-ejecución diaria de las queries de gráficos |
+| `queries/pilot/`, `pilot.json` | Métricas, validación, gráficos y piezas retiradas del piloto; `pilot.json` tiene ids, ejecuciones, costos y visualizaciones de todo |
+| `scripts/` | `activity_sql.py` y `pilot_sql.py` generan el SQL, `deploy_pilot.py` lo despliega, `dune_mcp.py` habla con Dune |
+| `data/contracts.csv` | Registro de contratos descubierto on chain; de acá salen las listas literales del SQL |
 | `data/` | Listas derivadas de la cadena (pools), con fecha |
 | `scf/` | La submission tal cual fue aprobada |
 

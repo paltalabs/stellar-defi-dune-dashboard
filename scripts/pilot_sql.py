@@ -247,8 +247,7 @@ SELECT m.*, a.last_activity_at, COALESCE(a.observed_addresses, 0) AS observed_ad
        CASE WHEN date_diff('hour', m.live_refreshed_at, CURRENT_TIMESTAMP) > 36
               OR covered_until < CURRENT_DATE - INTERVAL '1' DAY THEN 'STALE'
             ELSE 'OK' END AS pipeline_status,
-       CASE WHEN m.protocol = 'etherfuse' THEN 'Historical since 2024-02-01 + daily live'
-            ELSE 'Pilot since 2026-06-01; historical archive pending' END AS coverage_note
+       'Full history since ' || CAST(m.history_from AS VARCHAR) || '; archive monthly, live daily' AS coverage_note
 FROM metadata m LEFT JOIN activity a ON m.protocol = a.protocol ORDER BY m.protocol
 """
 
@@ -297,14 +296,16 @@ FROM previous ORDER BY period_start, protocol{role_select}
 
 
 def validation():
-    return """WITH users AS (SELECT * FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity'),
+    import activity_sql
+    registered = activity_sql.lit(activity_sql.registered_literals())
+    return f"""WITH users AS (SELECT * FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity'),
 duplicate_keys AS (
   SELECT protocol, activity_date, user_address, role, COUNT(*) AS n
   FROM users GROUP BY 1,2,3,4 HAVING COUNT(*) > 1
 )
 SELECT 'duplicate_daily_keys' AS check_name, COALESCE(SUM(n - 1), 0) AS failures FROM duplicate_keys
 UNION ALL
-SELECT 'invalid_addresses', COUNT(*) FROM users WHERE NOT regexp_like(user_address, '^[GC][A-Z2-7]{55}$')
+SELECT 'invalid_addresses', COUNT(*) FROM users WHERE NOT regexp_like(user_address, '^[GC][A-Z2-7]{{55}}$')
 UNION ALL
 SELECT 'invalid_role_or_date', COUNT(*) FROM users WHERE role IS NULL OR activity_date IS NULL
 UNION ALL
@@ -313,12 +314,15 @@ UNION ALL
 SELECT 'missing_protocol_metadata', 6 - COUNT(DISTINCT protocol)
 FROM dune.paltalabs.result_scf_users WHERE row_kind = 'metadata'
 UNION ALL
-SELECT 'history_live_gap', COUNT(*) FROM (
+SELECT 'archive_live_gap', COUNT(*) FROM (
   SELECT protocol FROM dune.paltalabs.result_scf_users WHERE row_kind = 'metadata'
   GROUP BY 1
-  HAVING MAX(covered_until) FILTER (WHERE source_layer = 'history') IS NULL
-      OR MAX(covered_until) FILTER (WHERE source_layer = 'history') < MAX(covered_from) FILTER (WHERE source_layer = 'live')
+  HAVING MAX(covered_until) FILTER (WHERE source_layer = 'archive') IS NULL
+      OR MAX(covered_until) FILTER (WHERE source_layer = 'archive') < MAX(covered_from) FILTER (WHERE source_layer = 'live')
 )
+UNION ALL
+SELECT 'unregistered_contracts', COUNT(*) FROM dune.paltalabs.result_scf_contracts
+WHERE contract_id NOT IN ({registered})
 UNION ALL
 SELECT 'cohort_partition_weekly', COUNT(*) FROM dune.paltalabs.result_scf_users_weekly
 WHERE new_observed + returning_observed <> active_addresses OR g_addresses + c_addresses <> active_addresses
@@ -330,11 +334,11 @@ WHERE new_observed + returning_observed <> active_addresses OR g_addresses + c_a
 
 def chart_protocol(grain):
     # Matview executions only persist a row count, so charts need their own SELECT.
-    return f"""-- Chart source: complete calendar {grain}s since the common pilot start, one row per protocol.
+    return f"""-- Chart source: complete calendar {grain}s since 2024-02-01, one row per protocol.
 SELECT period_start, protocol, active_addresses, g_addresses, c_addresses,
        new_observed, returning_observed, growth_rate
 FROM dune.paltalabs.result_scf_users_{grain}ly
-WHERE is_complete AND period_start >= DATE '{PILOT_START}'
+WHERE is_complete AND period_start >= DATE '{HISTORY_START}'
 ORDER BY period_start, protocol
 """
 
@@ -345,7 +349,7 @@ SELECT CAST(date_trunc('{grain}', activity_date) AS DATE) AS period_start, role,
        COUNT(DISTINCT user_address) AS active_addresses,
        COUNT(DISTINCT CASE WHEN user_address LIKE 'C%' THEN user_address END) AS c_addresses
 FROM dune.paltalabs.result_scf_users
-WHERE row_kind = 'activity' AND activity_date >= DATE '{PILOT_START}'
+WHERE row_kind = 'activity' AND activity_date >= DATE '{HISTORY_START}'
   AND activity_date < CAST(date_trunc('{grain}', CURRENT_DATE) AS DATE)
 GROUP BY 1, 2
 ORDER BY 1, 2
@@ -369,14 +373,15 @@ SELECT CAST(date_trunc('{grain}', activity_date) AS DATE) AS period_start,
        COUNT(DISTINCT CASE WHEN user_address LIKE 'G%' THEN user_address END) AS g_addresses,
        COUNT(DISTINCT CASE WHEN user_address LIKE 'C%' THEN user_address END) AS c_addresses
 FROM dune.paltalabs.result_scf_users
-WHERE row_kind = 'activity' AND activity_date >= DATE '{PILOT_START}'
+WHERE row_kind = 'activity' AND activity_date >= DATE '{HISTORY_START}'
   AND activity_date < CAST(date_trunc('{grain}', CURRENT_DATE) AS DATE)
 GROUP BY 1
 ORDER BY 1
 """
 
 
-CHARTS = {'chart_ecosystem_weekly': lambda: chart_ecosystem('week'),
+CHARTS = {'chart_integrity': lambda: __import__('activity_sql').chart_integrity(),
+          'chart_ecosystem_weekly': lambda: chart_ecosystem('week'),
           'chart_ecosystem_monthly': lambda: chart_ecosystem('month'),
 'chart_weekly_protocol': lambda: chart_protocol('week'),
           'chart_monthly_protocol': lambda: chart_protocol('month'),

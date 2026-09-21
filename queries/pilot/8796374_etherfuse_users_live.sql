@@ -1,5 +1,5 @@
 -- Query: https://dune.com/queries/8796374
--- Matview: dune.paltalabs.result_scf_etherfuse_users_live   cron: 0 5 * * *
+-- Matview: dune.paltalabs.result_scf_etherfuse_users_live   cron: None
 -- Última ejecución: 01M32KKMQD8882PW3CHQBZHVSB
 -- Costo: 2.252 cr; filas: 233; engine medium
 -- Generated from scripts/pilot_sql.py; T1 address activity only.
