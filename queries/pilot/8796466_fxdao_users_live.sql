@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796466
 -- Matview: dune.paltalabs.result_scf_fxdao_users_live   cron: 0 5 * * *
--- Última ejecución: 01M32CR81DR8F5G9DFMSBD9F74
--- Costo: 1.36 cr; filas: 1; engine medium
+-- Última ejecución: 01M32KKDTN1EGM0PBWWWKQ1C7R
+-- Costo: 1.025 cr; filas: 1; engine medium
 -- Generated from scripts/pilot_sql.py; T1 address activity only.
 -- Daily UTC buckets. Metadata survives an empty protocol and is never a user.
 WITH source AS (
@@ -11,7 +11,7 @@ WITH ops AS (
     json_extract_scalar(o.parameters_json_decoded, '$[1].symbol') AS fn,
     o.parameters_json_decoded AS params
   FROM stellar.history_operations o
-  WHERE o.closed_at_date >= DATE '2026-06-01' AND o.closed_at_date < CURRENT_DATE
+  WHERE o.closed_at_date >= DATE '2026-09-17' AND o.closed_at_date < CURRENT_DATE
     AND o.type_string = 'invoke_host_function'
     AND o.contract_id IN ('CCUN4RXU5VNDHSF4S4RKV4ZJYMX2YWKOH6L4AKEKVNVDQ7HY5QIAO4UB',   -- vaults
                           'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP')   -- locking pool
@@ -19,7 +19,7 @@ WITH ops AS (
 tx AS (
   SELECT id, lower(to_hex(transaction_hash)) AS tx_hash
   FROM stellar.history_transactions
-  WHERE closed_at_date >= DATE '2026-06-01' AND closed_at_date < CURRENT_DATE
+  WHERE closed_at_date >= DATE '2026-09-17' AND closed_at_date < CURRENT_DATE
     AND successful = TRUE
 )
 SELECT
@@ -53,9 +53,9 @@ WHERE (o.contract_id = 'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP
   GROUP BY 1, 2, 3, 4
 )
 SELECT protocol, activity_date, user_address, role, last_activity_at,
-       'activity' AS row_kind, DATE '2026-06-01' AS covered_from, CURRENT_DATE AS covered_until,
+       'activity' AS row_kind, DATE '2026-09-17' AS covered_from, CURRENT_DATE AS covered_until,
        CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer
 FROM users
 UNION ALL
 SELECT 'fxdao', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),
-       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-06-01', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'
+       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-09-17', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'

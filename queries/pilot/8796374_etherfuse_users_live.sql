@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796374
 -- Matview: dune.paltalabs.result_scf_etherfuse_users_live   cron: 0 5 * * *
--- Última ejecución: 01M32CQC4S1DG8WK4N9K90XYKE
--- Costo: 2.803 cr; filas: 1; engine medium
+-- Última ejecución: 01M32KKMQD8882PW3CHQBZHVSB
+-- Costo: 2.252 cr; filas: 233; engine medium
 -- Generated from scripts/pilot_sql.py; T1 address activity only.
 -- Daily UTC buckets. Metadata survives an empty protocol and is never a user.
 WITH source AS (
@@ -13,7 +13,7 @@ WITH ops AS (
     CASE WHEN o.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN o.selling_asset_code
          WHEN o.buying_asset_issuer  = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN o.buying_asset_code END AS offer_code
   FROM stellar.history_operations o
-  WHERE o.closed_at_date >= (SELECT MAX(covered_until) - INTERVAL '3' DAY FROM dune.paltalabs.result_scf_etherfuse_users_archive WHERE row_kind = 'metadata') AND o.closed_at_date < CURRENT_DATE
+  WHERE o.closed_at_date >= DATE '2026-09-17' AND o.closed_at_date < CURRENT_DATE
     AND o.type_string IN ('payment', 'path_payment_strict_send', 'path_payment_strict_receive', 'manage_sell_offer', 'manage_buy_offer', 'create_passive_sell_offer')
     AND (o.asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'
       OR o.source_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'
@@ -23,7 +23,7 @@ WITH ops AS (
 tx AS (
   SELECT id, lower(to_hex(transaction_hash)) AS tx_hash
   FROM stellar.history_transactions
-  WHERE closed_at_date >= (SELECT MAX(covered_until) - INTERVAL '3' DAY FROM dune.paltalabs.result_scf_etherfuse_users_archive WHERE row_kind = 'metadata') AND closed_at_date < CURRENT_DATE
+  WHERE closed_at_date >= DATE '2026-09-17' AND closed_at_date < CURRENT_DATE
     AND successful = TRUE
 ),
 rows_ AS (
@@ -60,7 +60,7 @@ trades AS (
     SUM(CASE WHEN tr.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN tr.buying_amount ELSE tr.selling_amount END) AS amount_b
   FROM stellar.history_trades tr
   CROSS JOIN UNNEST(ARRAY[tr.selling_account_address, tr.buying_account_address]) AS u(acct)
-  WHERE tr.closed_at_date >= (SELECT MAX(covered_until) - INTERVAL '3' DAY FROM dune.paltalabs.result_scf_etherfuse_users_archive WHERE row_kind = 'metadata') AND tr.closed_at_date < CURRENT_DATE
+  WHERE tr.closed_at_date >= DATE '2026-09-17' AND tr.closed_at_date < CURRENT_DATE
     AND (tr.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' OR tr.buying_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC')
     AND acct IS NOT NULL AND acct <> ''
   GROUP BY 2, 3, 4, 6
@@ -93,9 +93,9 @@ FROM trades
   GROUP BY 1, 2, 3, 4
 )
 SELECT protocol, activity_date, user_address, role, last_activity_at,
-       'activity' AS row_kind, (SELECT MAX(covered_until) - INTERVAL '3' DAY FROM dune.paltalabs.result_scf_etherfuse_users_archive WHERE row_kind = 'metadata') AS covered_from, CURRENT_DATE AS covered_until,
+       'activity' AS row_kind, DATE '2026-09-17' AS covered_from, CURRENT_DATE AS covered_until,
        CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer
 FROM users
 UNION ALL
 SELECT 'etherfuse', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),
-       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', (SELECT MAX(covered_until) - INTERVAL '3' DAY FROM dune.paltalabs.result_scf_etherfuse_users_archive WHERE row_kind = 'metadata'), CURRENT_DATE, CURRENT_TIMESTAMP, 'live'
+       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-09-17', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'

@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796476
 -- Matview: dune.paltalabs.result_scf_blend_users_live   cron: 0 5 * * *
--- Última ejecución: 01M32CRWB5ZN0DCC4TV4K87M1X
--- Costo: 26.358 cr; filas: 44429; engine medium
+-- Última ejecución: 01M32KNCQ6HNS5XF8Y7Z7NKQAC
+-- Costo: 1.567 cr; filas: 389; engine medium
 -- Generated from scripts/pilot_sql.py; T1 address activity only.
 -- Daily UTC buckets. Metadata survives an empty protocol and is never a user.
 WITH source AS (
@@ -27,7 +27,7 @@ ev AS (
     c.kind, he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash, he.topics_decoded, he.data_decoded
   FROM stellar.history_contract_events he
   JOIN contracts c ON c.contract_id = he.contract_id
-  WHERE he.closed_at_date >= DATE '2026-06-01' AND he.closed_at_date < CURRENT_DATE
+  WHERE he.closed_at_date >= DATE '2026-09-17' AND he.closed_at_date < CURRENT_DATE
     AND he.type_string = 'ContractEventTypeContract'
     AND he.successful = TRUE
     AND he.in_successful_contract_call = TRUE
@@ -90,9 +90,9 @@ WHERE (kind = 'pool' AND action IN ('supply', 'withdraw', 'supply_collateral', '
   GROUP BY 1, 2, 3, 4
 )
 SELECT protocol, activity_date, user_address, role, last_activity_at,
-       'activity' AS row_kind, DATE '2026-06-01' AS covered_from, CURRENT_DATE AS covered_until,
+       'activity' AS row_kind, DATE '2026-09-17' AS covered_from, CURRENT_DATE AS covered_until,
        CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer
 FROM users
 UNION ALL
 SELECT 'blend', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),
-       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-06-01', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'
+       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-09-17', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'
