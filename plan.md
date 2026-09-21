@@ -101,6 +101,26 @@ Todas leen solo `result_scf_activity`. Cada una con matview y cron `30 6 * * *`.
 - [ ] Dashboard público `dune.com/paltalabs/stellar-defi` con texto de metodología y links a este repo
 - [ ] Reporte de la tranche: qué se entregó, links, costos, y lo que quedó fuera
 
+### Piloto diario de usuarios (2026-09-21), 239,5 cr; acumulado del proyecto 343,0 de 500
+
+Reemplaza en la práctica a los pasos 2 a 4 para T1 mientras dura la prueba. Estado, ids y cada
+ejecución en `pilot.json`; SQL generado por `scripts/pilot_sql.py`, desplegado con
+`scripts/deploy_pilot.py`, espejado en `queries/pilot/`. Decisiones: refresco diario, se cuentan
+direcciones G y C (smart wallets), métricas de trading quedan para un plan futuro, no se crean
+más archives sin aprobación.
+
+- [x] 6 sondeos de 7 días (180 para FxDAO): 12,1 cr
+- [x] Archive Etherfuse 8796351 `result_scf_etherfuse_users_archive` desde 2024-02-01: 102,65 cr, 55.255 filas. Cron quitado (pausado) tras medir
+- [x] 6 vivas 8796374, 8796466, 8796476, 8796497, 8796508, 8796519, cron `0 5 * * *`: 116,97 cr (Phoenix 45,5, Blend 26,4, Aquarius 25,2, Soroswap 15,7). Los otros 5 protocolos arrancan en 2026-06-01
+- [x] Unión 8796528 `result_scf_users` (`0 8 * * *`) y 6 métricas 8796531 a 8796540 (`0 9`, validación `0 10`): 7,6 cr
+- [x] Validación: 7 checks, 0 fallos. Salud: 6 protocolos OK, Etherfuse desde 2024-02-01, resto desde 2026-06-01. Lectura 0,055 cr
+- [x] 5 queries de gráficos 8796719 a 8796723 (SELECT sobre matviews, sin matview propia): 0,149 cr
+- [x] 9 visualizaciones en inglés (ids en `pilot.json` → `visualizations`)
+- [x] Refresco de las queries de gráficos por MCP: `python3 scripts/deploy_pilot.py refresh-charts`. Hace falta porque la ejecución de una matview deja en su query origen solo `{"rows": N}` y los widgets no pueden colgar de las queries de métricas. Medido 2026-09-21: 0,172 cr por corrida (~5,2 cr/mes, costo de operación, no de construcción)
+- [ ] Programar `refresh-charts` a diario a las 10:30 UTC (crontab local, ver `docs/runbook.md`). Pendiente de instalar por el usuario
+- [x] Layout aplicado al dashboard 220644 el 2026-09-21: 2 textos (metodología, cobertura parcial) y 9 visualizaciones. Sigue **privado**; publicar requiere OK tras revisión
+- [ ] `pipeline_status` se calcula al refrescar la matview de salud: si esa matview deja de correr, el estado queda congelado en OK. Mostrar siempre `live_refreshed_at` al lado
+
 ## Entregable 2: solapamiento de usuarios (Tranche 2, USD 3.333)
 
 Sale de `result_scf_activity` sin escanear nada nuevo: matriz protocolo × protocolo de usuarios

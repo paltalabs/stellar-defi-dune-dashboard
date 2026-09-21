@@ -23,6 +23,19 @@ Por qué así: el refresh de una matview re-ejecuta su query y actualiza el resu
 los widgets, y su cron se crea por API. Los schedules de queries en la UI no se ven por API y se
 pierden si nadie los recuerda.
 
+## Gráficos del dashboard
+
+La ejecución de una matview deja en su query origen solo el conteo de filas, así que los widgets
+cuelgan de queries propias (`SCF35 · ...`, ids en `pilot.json`) que hacen SELECT sobre las matviews.
+Se re-ejecutan por MCP con la clave del `.env`, después de la validación (10:00 UTC):
+
+```
+CRON_TZ=UTC
+30 10 * * * cd <repo>/scripts && /usr/bin/python3 deploy_pilot.py refresh-charts >> <repo>/logs/chart_refresh.log 2>&1
+```
+
+Costo medido: 0,172 cr por corrida.
+
 ## Crear una pieza nueva
 
 1. Crear la query en Dune con el SQL del repo. `is_temp: false`. Nombre con prefijo `SCF35 ·`.
