@@ -5,7 +5,7 @@
 -- Notas: la más cara por fila; dos caminos de parseo (formato viejo y nuevo) sobre 14 pools
 -- Espejo escrito a mano el 2026-09-10 (el endpoint REST de lectura devolvió 401; ver docs/runbook.md). El SQL manda en Dune.
 
--- SCF35 · Phoenix activity. Schema: docs/modelo-de-datos.md in github.com/paltalabs/defi-dune-dashboards
+-- SCF35 · Phoenix activity. Schema: docs/modelo-de-datos.md in github.com/paltalabs/stellar-defi-dune-dashboard
 WITH pools AS (
   SELECT pool, MAX(token_a) AS token_a, MAX(token_b) AS token_b
   FROM (

@@ -5,7 +5,7 @@
 -- Notas: cero filas porque no hubo actividad en la ventana; el join se verificó con 150 días (17 filas, sondeo 8666539)
 -- Espejo escrito a mano el 2026-09-10 (el endpoint REST de lectura devolvió 401; ver docs/runbook.md). El SQL manda en Dune.
 
--- SCF35 · FxDAO activity. Schema: docs/modelo-de-datos.md in github.com/paltalabs/defi-dune-dashboards
+-- SCF35 · FxDAO activity. Schema: docs/modelo-de-datos.md in github.com/paltalabs/stellar-defi-dune-dashboard
 WITH ops AS (
   SELECT
     o.contract_id, o.closed_at, o.transaction_id, o.source_account,
