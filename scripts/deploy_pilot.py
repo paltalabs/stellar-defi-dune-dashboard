@@ -10,6 +10,7 @@ from pathlib import Path
 
 from dune_mcp import DuneMCP, ROOT
 import pilot_sql
+import activity_sql
 
 STATE = ROOT / 'pilot.json'
 
@@ -56,9 +57,13 @@ def sync_query(client, state, key, sql, name, temporary=False):
 
 
 def mirror(key, piece):
-    folder = ROOT / 'queries' / ('_probes' if key.startswith('probe_') else 'pilot')
+    protocol, _, rest = key.partition('_')
+    if rest in ('activity', 'activity_archive'):
+        folder, name = ROOT / 'queries' / protocol, rest
+    else:
+        folder, name = ROOT / 'queries' / ('_probes' if key.startswith('probe_') else 'pilot'), key
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"{piece['query_id']}_{key}.sql"
+    path = folder / f"{piece['query_id']}_{name}.sql"
     header = (f"-- Query: https://dune.com/queries/{piece['query_id']}\n"
               f"-- Matview: {piece.get('matview')}   cron: {piece.get('cron')}\n"
               f"-- Última ejecución: {piece.get('last_execution')}\n"
@@ -90,8 +95,8 @@ def finish(client, state, key, execution_id):
         raise RuntimeError(f'Falló {key}')
     if record['state'] != 'COMPLETED':
         raise RuntimeError(f'Ejecución pendiente: usar finish {key} antes de continuar')
-    if cost is not None and cost > 80:
-        raise RuntimeError('La ejecución superó 80 créditos; revisar antes de continuar')
+    if cost is not None and cost > state.get('execution_alert_credits', 80):
+        raise RuntimeError('La ejecución superó el aviso por ejecución; revisar antes de continuar')
     return result
 
 
@@ -115,9 +120,58 @@ def run(client, state, key, piece, matview=None, cron=None):
     return finish(client, state, key, execution_id)
 
 
+def next_day(day):
+    import datetime
+    return (datetime.date.fromisoformat(day) + datetime.timedelta(days=1)).isoformat()
+
+
+def record_probe(client, state, key, result):
+    preview = result.get('result_preview') or {}
+    execution_id = result['execution']['execution_id']
+    if preview.get('state') != 'COMPLETED':
+        preview = client.call('getExecutionResults', {'executionId': execution_id, 'timeout': 280, 'limit': 1})
+    meta = preview.get('resultMetadata') or {}
+    cost = float(meta.get('executionCostCredits') or 0)
+    state['executions'].append({'key': key, 'query_id': result['query']['query_id'], 'execution_id': execution_id,
+                                'credits': cost, 'state': preview.get('state'), 'metadata': meta})
+    save(state)
+    print(json.dumps({'key': key, 'state': preview.get('state'), 'rows': meta.get('totalRowCount'), 'credits': cost,
+                      'error': preview.get('error')}), flush=True)
+
+
+def export_registry(client, state):
+    # Registry snapshot in the repo: the literal contract lists are generated from it (rule 5).
+    result = client.call('createAndExecuteQuery', {'name': '[SCF35 probe] export contract registry', 'is_temp': True,
+                         'query': 'SELECT protocol, kind, contract_id, token_a, token_b, first_seen FROM dune.paltalabs.result_scf_contracts ORDER BY 1, 2, 6, 3',
+                         'performance': 'medium', 'timeout': 200, 'max_rows_returned': 32000})
+    record_probe(client, state, 'export_registry', result)
+    rows = result['result_preview']['data']['rows']
+    import csv
+    with open(activity_sql.REGISTRY_CSV, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=['protocol', 'kind', 'contract_id', 'token_a', 'token_b', 'first_seen'])
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: row.get(k) or '' for k in writer.fieldnames})
+    print(json.dumps({'registry_rows': len(rows)}), flush=True)
+
+
+def adopt_step1_query(client, state, protocol, key):
+    # The live layer reuses the step-1 query (queries/<p>/<id>_activity.sql); verify it first.
+    path = next((ROOT / 'queries' / protocol).glob('*_activity.sql'))
+    query_id = int(path.name.split('_')[0])
+    remote = client.call('getDuneQuery', {'query_id': query_id})
+    norm = lambda s: '\n'.join(x.strip() for x in s.splitlines() if x.strip() and not x.lstrip().startswith('--'))
+    if norm(remote['query']) != norm(path.read_text()):
+        raise RuntimeError(f'SQL remoto de {query_id} cambió fuera del repo')
+    state['pieces'][key] = {'query_id': query_id, 'sql': remote['query'], 'matview': None, 'cron': None}
+    save(state)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', choices=['inspect', 'probe', 'archive', 'live', 'metric', 'chart', 'refresh-charts', 'history', 'history-incremental', 'set-cron', 'finish'])
+    parser.add_argument('command', choices=['inspect', 'probe', 'archive', 'live', 'metric', 'chart', 'refresh-charts', 'history', 'history-incremental', 'set-cron', 'finish',
+                                            'registry', 'export-registry', 'test-activity', 'activity-archive', 'activity-live',
+                                            'activity-archive-incremental'])
     parser.add_argument('target', nargs='?')
     parser.add_argument('cron', nargs='?')
     args = parser.parse_args()
@@ -148,6 +202,44 @@ def main():
                               'credits': meta.get('executionCostCredits')}), flush=True)
             if float(meta.get('executionCostCredits') or 0) > 80:
                 raise RuntimeError('La ejecución superó 80 créditos; revisar antes de continuar')
+        return
+    if args.command == 'registry':
+        piece = sync_query(client, state, 'contracts', activity_sql.registry(incremental='contracts' in state['pieces']),
+                           'SCF35 · contract registry')
+        run(client, state, 'contracts', piece, 'result_scf_contracts', '0 2 * * 1')
+        export_registry(client, state)
+        return
+    if args.command == 'export-registry':
+        export_registry(client, state)
+        return
+    if args.command == 'test-activity':
+        # One-day test in a temporary query: cost and rows before creating an archive.
+        day = args.cron
+        sql = activity_sql.layer(args.target, 'test', (day, next_day(day)))
+        # create + execute + results(limit 0): createAndExecuteQuery responses got truncated for Blend.
+        created = client.call('createDuneQuery', {'name': f'[SCF35 probe] activity {args.target} {day}',
+                              'query': sql, 'is_temp': True, 'is_private': False})
+        query_id = created.get('query_id') or created.get('queryId')
+        started = client.call('executeQueryById', {'query_id': query_id, 'performance': 'medium'})
+        record_probe(client, state, f'probe_activity_{args.target}',
+                     {'query': {'query_id': query_id}, 'execution': {'execution_id': started.get('execution_id')}})
+        return
+    if args.command == 'activity-archive-incremental':
+        # After the first full build: swap to the self-reading SQL and refresh once to verify it.
+        key = f'{args.target}_activity_archive'
+        piece = sync_query(client, state, key, activity_sql.archive_incremental(args.target),
+                           f'SCF35 · {args.target.title()} activity archive')
+        if args.cron != 'norefresh':
+            run(client, state, key, piece, 'result_scf_' + key, piece.get('cron'))
+        return
+    if args.command in ('activity-archive', 'activity-live'):
+        kind = args.command.split('-')[1]
+        key = f"{args.target}_activity{'_archive' if kind == 'archive' else ''}"
+        if key not in state['pieces'] and kind == 'live':
+            adopt_step1_query(client, state, args.target, key)
+        name = f"SCF35 · {args.target.title()} activity{' archive' if kind == 'archive' else ''}"
+        piece = sync_query(client, state, key, activity_sql.layer(args.target, kind), name)
+        run(client, state, key, piece, 'result_scf_' + key, '0 3 * * 1' if kind == 'archive' else '0 5 * * *')
         return
     if args.command == 'set-cron':
         piece = state['pieces'][args.target]
@@ -204,19 +296,22 @@ FROM source GROUP BY 1,2,3 ORDER BY 1,2,3"""
                  'chart_roles_monthly': 'monthly active addresses by role',
                  'chart_health': 'data coverage and health',
                  'chart_ecosystem_weekly': 'weekly active addresses, all protocols',
-                 'chart_ecosystem_monthly': 'monthly active addresses, all protocols'}
+                 'chart_ecosystem_monthly': 'monthly active addresses, all protocols',
+                 'chart_integrity': 'activity concentration by protocol'}
         piece = sync_query(client, state, key, pilot_sql.CHARTS[key](), 'SCF35 · ' + names[key])
         run(client, state, key, piece)
     else:
-        functions = {'users': pilot_sql.combined, 'users_health': pilot_sql.health,
+        functions = {'users': activity_sql.users, 'users_health': pilot_sql.health,
+                     'integrity': activity_sql.integrity,
                      'users_weekly': lambda: pilot_sql.periods('week'),
                      'users_monthly': lambda: pilot_sql.periods('month'),
                      'users_roles_weekly': lambda: pilot_sql.periods('week', True),
                      'users_roles_monthly': lambda: pilot_sql.periods('month', True),
                      'users_validation': pilot_sql.validation}
         key = args.target
-        piece = sync_query(client, state, key, functions[key](), 'SCF35 · ' + key.replace('_', ' '))
-        cron = '0 8 * * *' if key == 'users' else ('0 10 * * *' if key == 'users_validation' else '0 9 * * *')
+        names = {'integrity': 'activity concentration (data integrity)'}
+        piece = sync_query(client, state, key, functions[key](), 'SCF35 · ' + names.get(key, key.replace('_', ' ')))
+        cron = {'users': '0 8 * * *', 'users_validation': '0 10 * * *'}.get(key, '0 9 * * *')
         run(client, state, key, piece, 'result_scf_' + key, cron)
 
 

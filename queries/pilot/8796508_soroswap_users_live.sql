@@ -1,5 +1,5 @@
 -- Query: https://dune.com/queries/8796508
--- Matview: dune.paltalabs.result_scf_soroswap_users_live   cron: 0 5 * * *
+-- Matview: dune.paltalabs.result_scf_soroswap_users_live   cron: None
 -- Última ejecución: 01M32KM1ECB3MEYARZ7JMTR0C7
 -- Costo: 2.139 cr; filas: 139; engine medium
 -- Generated from scripts/pilot_sql.py; T1 address activity only.

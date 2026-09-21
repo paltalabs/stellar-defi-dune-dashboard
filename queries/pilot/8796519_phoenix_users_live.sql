@@ -1,5 +1,5 @@
 -- Query: https://dune.com/queries/8796519
--- Matview: dune.paltalabs.result_scf_phoenix_users_live   cron: 0 5 * * *
+-- Matview: dune.paltalabs.result_scf_phoenix_users_live   cron: None
 -- Última ejecución: 01M32KMSXZZBX9EN2PTPFQQFEJ
 -- Costo: 3.946 cr; filas: 19; engine medium
 -- Generated from scripts/pilot_sql.py; T1 address activity only.

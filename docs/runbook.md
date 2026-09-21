@@ -1,95 +1,106 @@
 # Runbook: reconstruir y operar
 
 Cualquier persona con acceso al team `paltalabs` en Dune puede reconstruir todo desde este repo.
-No hay nada fuera de Dune y de este repo. No hay pasos manuales recurrentes.
+Ids, ejecuciones y costos de cada pieza están en `pilot.json`; el SQL lo genera
+`scripts/activity_sql.py` (capas de actividad, registro, unión, integridad) y
+`scripts/pilot_sql.py` (métricas, validación, gráficos); `scripts/deploy_pilot.py` lo despliega.
 
-## Estado al 2026-09-21: piloto T1 con puente (Fase 0)
-
-Lo que corre hoy no es todavía el diseño de abajo; la Fase 1 de `plan.md` lo lleva ahí. Ids y
-ejecuciones en `pilot.json`; SQL generado por `scripts/pilot_sql.py`; espejos en `queries/pilot/`.
+## Piezas (Fase 1, 2026-09-22)
 
 ```
-por protocolo:
-  SCF35 · <P> users live       result_scf_<p>_users_live      cron 0 5 * * *   desde DATE '2026-09-17'
-  SCF35 · <P> users history    result_scf_<p>_users_history   sin cron, congelada hasta 2026-09-18
+registro:
+  SCF35 · contract registry            result_scf_contracts              lunes 02:00   incremental, se lee a sí mismo
+por protocolo (blend, aquarius, soroswap, phoenix, fxdao, etherfuse):
+  SCF35 · <P> activity archive         result_scf_<p>_activity_archive   lunes 03:00   historia desde 2024-02-01 hasta el 1 del mes
+  SCF35 · <P> activity                 result_scf_<p>_activity           diario 05:00  desde el covered_until del archive hasta ayer
 capa común y métricas:
-  result_scf_users (0 8) → weekly, monthly, roles_weekly, roles_monthly, health (0 9) → validation (0 10)
+  SCF35 · users                        result_scf_users                  diario 08:00  grano diario (protocolo, día, dirección, rol) desde las 12 capas
+  SCF35 · users weekly / monthly / roles weekly / roles monthly / health, activity concentration
+                                       result_scf_users_*, result_scf_integrity          diario 09:00
+  SCF35 · users validation             result_scf_users_validation       diario 10:00
 gráficos:
-  7 queries SCF35 · ... que leen las matviews, re-ejecutadas por .github/workflows/refresh-charts.yml (10:30)
+  queries SCF35 · ... que hacen SELECT sobre las matviews, con schedule de Dune a las 10:30 (ver abajo)
 ```
 
-Reconstruir el piloto: `python3 scripts/deploy_pilot.py live <p>`, `history <p>`, `metric <clave>`,
-`chart <clave>`, en ese orden. `refresh-charts` re-ejecuta los gráficos. Cualquier ejecución de más
-de 80 cr detiene el script.
+### Por qué el archive corre cada lunes y no cada mes
 
-## Piezas (diseño objetivo)
+Dune rechaza crons de matview mensuales (`Unsupported cron expression`; el máximo es semanal).
+El archive corre cada lunes y se lee a sí mismo: el primer lunes del mes agrega el mes que
+cerró desde las tablas crudas; los demás lunes la condición `day_of_month(CURRENT_DATE) <= 7`
+es falsa, Dune no escanea (medido: 0,01 cr contra 0,66) y la tabla se copia igual. El primer
+build sí escanea toda la historia. Repetir un escaneo completo es un paso a mano: `activity-archive
+<p>` con el SQL de build y volver a `activity-archive-incremental <p>`.
 
-```
-por protocolo:
-  SCF35 · <protocolo> activity archive   query, no temporal, sin parámetros
-      └─ result_scf_<protocolo>_activity_archive   matview, cron mensual (1 de cada mes, 03:00 UTC)
-  SCF35 · <protocolo> activity           query: lee la tabla cruda solo desde MAX(closed_at) del archive
-      └─ result_scf_<protocolo>_activity           matview, cron diario (05:00 UTC)
-capa común:
-  SCF35 · activity (all protocols)       UNION ALL de las 12 matviews de arriba
-      └─ result_scf_activity                       matview, cron diario (05:30 UTC)
-dashboard:
-  SCF35 · <métrica>                      queries de análisis: solo leen result_scf_activity
-      └─ result_scf_<métrica>                      matview, cron diario (06:00 UTC), o cada 6 h si se decide pagarlo
-```
+### Cadena diaria
 
-Por qué así: el refresh de una matview re-ejecuta su query y actualiza el resultado que muestran
-los widgets, y su cron se crea por API. Los schedules de queries en la UI no se ven por API y se
-pierden si nadie los recuerda.
+05:00 vivas → 08:00 users → 09:00 métricas e integridad → 10:00 validación → 10:30 gráficos.
+Dune no garantiza orden entre matviews; los horarios dejan margen. La tabla de salud marca
+`STALE` si la viva no corrió en 36 h.
 
-## Gráficos del dashboard: la única pieza recurrente fuera de una matview
+## Gráficos: schedule de Dune (excepción a la regla 1)
 
-La ejecución de una matview deja en su query origen solo el conteo de filas (`{"rows": N}`,
-verificado 2026-09-21), así que un widget sobre esa query no muestra datos. Los widgets cuelgan de
-queries propias (`SCF35 · ...`) que hacen SELECT sobre las matviews, y las re-ejecuta
-`.github/workflows/refresh-charts.yml` a las 10:30 UTC con el secret `DUNE_API_KEY`. Está en el repo,
-así que se ve y se restaura, que es lo que pide la regla 1. Costo medido: ~0,5 cr por corrida.
+El refresco de una matview deja en su query origen solo `{"rows": N}` (verificado 2026-09-21),
+así que un widget sobre esa query no muestra datos. Los widgets cuelgan de queries propias
+que hacen SELECT sobre las matviews, y esas queries necesitan un schedule. La API y el MCP de
+Dune no pueden crear, leer ni restaurar schedules de queries, por eso esto se hace a mano y
+queda anotado acá. Decidido con el usuario el 2026-09-22.
 
-## Crear una pieza nueva
+En cada query, `Schedule` → diario → 10:30 UTC → engine medium:
 
-1. Crear la query en Dune con el SQL del repo. `is_temp: false`. Nombre con prefijo `SCF35 ·`.
-2. Ejecutar en engine medium. Anotar filas y `executionCostCredits` en la cabecera del archivo SQL.
-3. `createMaterializedView` con el nombre `result_scf_...` y el cron de la tabla de arriba.
-   Esperar a que termine la primera ejecución antes de crear consumidores.
-4. Guardar el SQL en `queries/<protocolo>/<query_id>_<slug>.sql` con la cabecera estándar.
-5. Marcar el paso en `plan.md`. Commit.
+| Query | Qué alimenta |
+|---|---|
+| https://dune.com/queries/8796723 | Data coverage and pipeline health |
+| https://dune.com/queries/8797598 | WAU across all protocols (G y C) |
+| https://dune.com/queries/8797599 | MAU across all protocols (G y C) |
+| https://dune.com/queries/8796719 | WAU, crecimiento WoW, nuevos vs recurrentes por protocolo |
+| https://dune.com/queries/8796720 | MAU, crecimiento MoM, nuevos vs recurrentes por protocolo |
+| https://dune.com/queries/8796721 | WAU por rol |
+| https://dune.com/queries/8796722 | MAU por rol |
+| https://dune.com/queries/8798732 | Activity concentration by protocol (integridad) |
+
+Costo medido: unos 0,5 cr por corrida de las 8. `python3 scripts/deploy_pilot.py refresh-charts`
+hace lo mismo por API si hace falta refrescarlas a mano.
+
+## Reconstruir desde cero
+
+Orden exacto (cada paso espera la primera ejecución del anterior):
+
+1. `python3 scripts/deploy_pilot.py registry` crea el registro (primer build 78,9 cr) y
+   `export-registry` escribe `data/contracts.csv`. Después, `registry` otra vez deja el SQL
+   incremental.
+2. Por protocolo: `test-activity <p> <día>` (1 día, barato), `activity-archive <p>` (build
+   completo), `activity-archive-incremental <p>` (SQL que se lee a sí mismo), `activity-live <p>`.
+3. `metric users`, luego `metric users_weekly`, `users_monthly`, `users_roles_weekly`,
+   `users_roles_monthly`, `users_health`, `integrity`, y al final `metric users_validation`.
+4. `chart <clave>` para cada gráfico, schedule en la UI (tabla de arriba), visualizaciones y
+   dashboard (ids en `pilot.json` → `visualizations` y `dashboard_after_layout`).
+
+Cualquier ejecución que supere `execution_alert_credits` de `pilot.json` detiene el script. El
+tope de construcción está en `construction_cap_credits`.
 
 ## Espejar el SQL al repo
 
-`scripts/mirror.py` baja el SQL de cada query de `queries.yml` por la API REST de Dune y escribe
-`queries/<protocolo>/<id>_<slug>.sql` con la cabecera. Necesita `DUNE_API_KEY` con permiso de
-lectura de queries. Al 2026-09-10 las llaves de entonces devolvían `invalid API Key`; la llave
-actual del `.env` sí lee `GET /api/v1/query/{id}` (verificado 2026-09-21) y `scripts/dune_mcp.py`
-la usa para `getDuneQuery`.
-
-## Cabecera estándar de cada SQL
-
-```
--- Query: SCF35 · <nombre>          https://dune.com/queries/<id>
--- Matview: dune.paltalabs.result_scf_<...>   cron: <expresión>   (o "ninguna")
--- Lee: <tablas crudas o matviews>
--- Costo medido: <fecha> <créditos> cr, <filas> filas, engine medium
--- Notas:
-```
+`deploy_pilot.py` escribe el SQL de cada pieza al crearla o cambiarla, con cabecera y último
+costo: capas de actividad en `queries/<protocolo>/<id>_activity[_archive].sql`, el resto en
+`queries/pilot/`. Antes de cambiar una query compara el SQL remoto con el último desplegado y se
+detiene si alguien la cambió fuera del repo. `getDuneQuery` se lee por REST
+(`GET /api/v1/query/{id}`): la llave actual funciona (verificado 2026-09-21) y el MCP devolvía
+cuerpos vacíos.
 
 ## Si algo se rompe
 
-- **Un protocolo cambia el formato de un evento o despliega un contrato nuevo.** La query se
-  queda ciega en silencio. Señal: la fila de ese protocolo en el widget "last event per protocol"
-  del dashboard se atrasa. Arreglo: actualizar `protocols.yml`, el `VALUES` de la query, y
-  refrescar el archive una vez.
-- **El archive falla un mes.** La ventana viva sigue desde el último `MAX(closed_at)` del archive,
-  así que no hay hueco mientras la ventana viva no supere su filtro de poda (`current_date - 75 días`).
-  Si pasó más de eso, refrescar el archive a mano una vez.
-- **Se quiere apagar todo.** Quitar el cron de las matviews (`updateMaterializedView` con
-  `cron_expression: null`). Las tablas quedan congeladas y el dashboard sigue mostrando la última foto.
+- **Un protocolo despliega un pool nuevo.** El registro lo encuentra el lunes y el check
+  `unregistered_contracts` pasa a mayor que 0. Arreglo: `export-registry`, y volver a desplegar
+  `activity-archive-incremental <p>` y `activity-live <p>` (el SQL lleva la lista literal).
+- **Un protocolo cambia el formato de un evento.** La fila de ese protocolo en la tabla de salud
+  se atrasa. Arreglo: actualizar la fuente en `activity_sql.py` y reconstruir el archive completo.
+- **El archive falla el primer lunes del mes.** La viva sigue desde el `covered_until` viejo
+  (hasta 75 días); el check `archive_live_gap` avisa si se pasa de eso.
+- **Se quiere apagar todo.** `set-cron <clave> none` en cada matview. Las tablas quedan
+  congeladas y el dashboard muestra la última foto.
 
-## Rodar el corte a mano
+## Piezas retiradas
 
-No hace falta. El archive se refresca solo cada mes con historia completa; el costo de eso es el
-precio de no tener pasos manuales (ver `plan.md`, presupuesto).
+El piloto T1 del 2026-09-21 (`result_scf_<p>_users_live`, `result_scf_<p>_users_history`,
+`result_scf_etherfuse_users_archive`) quedó reemplazado por las capas de actividad. Sus matviews
+quedan sin cron y su SQL en `queries/pilot/`.

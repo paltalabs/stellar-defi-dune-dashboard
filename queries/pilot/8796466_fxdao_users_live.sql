@@ -1,5 +1,5 @@
 -- Query: https://dune.com/queries/8796466
--- Matview: dune.paltalabs.result_scf_fxdao_users_live   cron: 0 5 * * *
+-- Matview: dune.paltalabs.result_scf_fxdao_users_live   cron: None
 -- Última ejecución: 01M32KKDTN1EGM0PBWWWKQ1C7R
 -- Costo: 1.025 cr; filas: 1; engine medium
 -- Generated from scripts/pilot_sql.py; T1 address activity only.

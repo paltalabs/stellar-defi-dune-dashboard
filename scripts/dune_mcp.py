@@ -61,12 +61,17 @@ class DuneMCP:
                 if session:
                     self.headers['Mcp-Session-Id'] = session
                 if 'text/event-stream' in response.headers.get('Content-Type', ''):
-                    # Stop at the RPC response; the SSE connection may stay open afterwards.
-                    body = ''
+                    # SSE: an event may span several data: lines; join them until the blank line.
+                    # Stop at the RPC response; the connection may stay open afterwards.
+                    body, chunks = '', []
                     for line in response:
-                        text = line.decode()
+                        text = line.decode().rstrip('\r\n')
                         if text.startswith('data:'):
-                            candidate = json.loads(text[5:].strip())
+                            chunks.append(text[5:].lstrip(' ') if not chunks else text[5:])
+                            continue
+                        if text == '' and chunks:
+                            candidate = json.loads('\n'.join(chunks))
+                            chunks = []
                             if candidate.get('id') == payload.get('id'):
                                 body = json.dumps(candidate)
                                 break
