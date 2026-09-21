@@ -1,6 +1,6 @@
 {
   "dashboard_url": "https://dune.com/paltalabs/stellar-defi",
-  "construction_cap_credits": 500,
+  "construction_cap_credits": 600,
   "previous_project_credits": 103.5,
   "pieces": {
     "probe_etherfuse": {
@@ -83,80 +83,80 @@
     },
     "etherfuse_users_live": {
       "query_id": 8796374,
-      "sql": "-- Generated from scripts/pilot_sql.py; T1 address activity only.\n-- Daily UTC buckets. Metadata survives an empty protocol and is never a user.\nWITH source AS (\nWITH ops AS (\n  SELECT\n    o.type_string, o.closed_at, o.transaction_id, o.source_account, o.\"from\" AS from_acct, o.\"to\" AS to_acct, o.amount, o.source_amount,\n    CASE WHEN o.asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN o.asset_code END AS dest_code,\n    CASE WHEN o.source_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN o.source_asset_code END AS src_code,\n    CASE WHEN o.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN o.selling_asset_code\n         WHEN o.buying_asset_issuer  = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN o.buying_asset_code END AS offer_code\n  FROM stellar.history_operations o\n  WHERE o.closed_at_date >= (SELECT MAX(covered_until) - INTERVAL '3' DAY FROM dune.paltalabs.result_scf_etherfuse_users_archive WHERE row_kind = 'metadata') AND o.closed_at_date < CURRENT_DATE\n    AND o.type_string IN ('payment', 'path_payment_strict_send', 'path_payment_strict_receive', 'manage_sell_offer', 'manage_buy_offer', 'create_passive_sell_offer')\n    AND (o.asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'\n      OR o.source_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'\n      OR o.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'\n      OR o.buying_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC')\n),\ntx AS (\n  SELECT id, lower(to_hex(transaction_hash)) AS tx_hash\n  FROM stellar.history_transactions\n  WHERE closed_at_date >= (SELECT MAX(covered_until) - INTERVAL '3' DAY FROM dune.paltalabs.result_scf_etherfuse_users_archive WHERE row_kind = 'metadata') AND closed_at_date < CURRENT_DATE\n    AND successful = TRUE\n),\nrows_ AS (\n  SELECT o.closed_at, o.transaction_id, o.to_acct AS user_address,\n         CASE WHEN COALESCE(o.from_acct, o.source_account) = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN 'mint' ELSE 'receive' END AS action,\n         CASE WHEN COALESCE(o.from_acct, o.source_account) = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN 'minter' ELSE 'holder' END AS role,\n         o.dest_code AS token_a, o.amount AS amount_a, o.src_code AS token_b, o.source_amount AS amount_b\n  FROM ops o\n  WHERE o.type_string IN ('payment', 'path_payment_strict_send', 'path_payment_strict_receive')\n    AND o.dest_code IS NOT NULL\n    AND o.to_acct <> 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'\n  UNION ALL\n  SELECT o.closed_at, o.transaction_id, COALESCE(o.from_acct, o.source_account),\n         CASE WHEN o.to_acct = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN 'redeem' ELSE 'send' END,\n         CASE WHEN o.to_acct = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN 'redeemer' ELSE 'holder' END,\n         COALESCE(o.src_code, o.dest_code), COALESCE(o.source_amount, o.amount), NULL, NULL\n  FROM ops o\n  WHERE o.type_string IN ('payment', 'path_payment_strict_send', 'path_payment_strict_receive')\n    AND COALESCE(o.src_code, CASE WHEN o.type_string = 'payment' THEN o.dest_code END) IS NOT NULL\n    AND COALESCE(o.from_acct, o.source_account) <> 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'\n  UNION ALL\n  SELECT o.closed_at, o.transaction_id, o.source_account, 'offer', 'trader', o.offer_code, o.amount, NULL, NULL\n  FROM ops o\n  WHERE o.type_string IN ('manage_sell_offer', 'manage_buy_offer', 'create_passive_sell_offer') AND o.offer_code IS NOT NULL\n),\ntrades AS (\n  SELECT\n    MIN(tr.closed_at) AS closed_at,\n    tr.history_operation_id,\n    acct AS user_address,\n    CASE WHEN tr.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN tr.selling_asset_code ELSE tr.buying_asset_code END AS token_a,\n    SUM(CASE WHEN tr.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN tr.selling_amount ELSE tr.buying_amount END) AS amount_a,\n    CASE WHEN tr.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN COALESCE(NULLIF(tr.buying_asset_code, ''), 'XLM') ELSE COALESCE(NULLIF(tr.selling_asset_code, ''), 'XLM') END AS token_b,\n    SUM(CASE WHEN tr.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN tr.buying_amount ELSE tr.selling_amount END) AS amount_b\n  FROM stellar.history_trades tr\n  CROSS JOIN UNNEST(ARRAY[tr.selling_account_address, tr.buying_account_address]) AS u(acct)\n  WHERE tr.closed_at_date >= (SELECT MAX(covered_until) - INTERVAL '3' DAY FROM dune.paltalabs.result_scf_etherfuse_users_archive WHERE row_kind = 'metadata') AND tr.closed_at_date < CURRENT_DATE\n    AND (tr.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' OR tr.buying_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC')\n    AND acct IS NOT NULL AND acct <> ''\n  GROUP BY 2, 3, 4, 6\n)\nSELECT\n  'etherfuse' AS protocol,\n  CAST(NULL AS VARCHAR) AS contract_id,\n  r.closed_at,\n  t.tx_hash,\n  r.user_address,\n  r.action,\n  r.role,\n  CAST(NULL AS VARCHAR) AS pool,\n  r.token_a,\n  CAST(r.amount_a AS DECIMAL(38,7)) AS amount_a,\n  NULLIF(r.token_b, '') AS token_b,\n  CAST(r.amount_b AS DECIMAL(38,7)) AS amount_b\nFROM rows_ r\nJOIN tx t ON t.id = r.transaction_id\nWHERE r.user_address IS NOT NULL AND r.user_address <> ''\nUNION ALL\nSELECT 'etherfuse', NULL, closed_at, 'op:' || CAST(history_operation_id AS VARCHAR), user_address, 'trade', 'trader', NULL,\n       token_a, CAST(amount_a AS DECIMAL(38,7)), token_b, CAST(amount_b AS DECIMAL(38,7))\nFROM trades\n), users AS (\n  SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date,\n         user_address, role, MAX(closed_at) AS last_activity_at\n  FROM source\n  WHERE regexp_like(user_address, '^[GC][A-Z2-7]{55}$') AND role IS NOT NULL\n  GROUP BY 1, 2, 3, 4\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at,\n       'activity' AS row_kind, (SELECT MAX(covered_until) - INTERVAL '3' DAY FROM dune.paltalabs.result_scf_etherfuse_users_archive WHERE row_kind = 'metadata') AS covered_from, CURRENT_DATE AS covered_until,\n       CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer\nFROM users\nUNION ALL\nSELECT 'etherfuse', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', (SELECT MAX(covered_until) - INTERVAL '3' DAY FROM dune.paltalabs.result_scf_etherfuse_users_archive WHERE row_kind = 'metadata'), CURRENT_DATE, CURRENT_TIMESTAMP, 'live'\n",
+      "sql": "-- Generated from scripts/pilot_sql.py; T1 address activity only.\n-- Daily UTC buckets. Metadata survives an empty protocol and is never a user.\nWITH source AS (\nWITH ops AS (\n  SELECT\n    o.type_string, o.closed_at, o.transaction_id, o.source_account, o.\"from\" AS from_acct, o.\"to\" AS to_acct, o.amount, o.source_amount,\n    CASE WHEN o.asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN o.asset_code END AS dest_code,\n    CASE WHEN o.source_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN o.source_asset_code END AS src_code,\n    CASE WHEN o.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN o.selling_asset_code\n         WHEN o.buying_asset_issuer  = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN o.buying_asset_code END AS offer_code\n  FROM stellar.history_operations o\n  WHERE o.closed_at_date >= DATE '2026-09-17' AND o.closed_at_date < CURRENT_DATE\n    AND o.type_string IN ('payment', 'path_payment_strict_send', 'path_payment_strict_receive', 'manage_sell_offer', 'manage_buy_offer', 'create_passive_sell_offer')\n    AND (o.asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'\n      OR o.source_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'\n      OR o.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'\n      OR o.buying_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC')\n),\ntx AS (\n  SELECT id, lower(to_hex(transaction_hash)) AS tx_hash\n  FROM stellar.history_transactions\n  WHERE closed_at_date >= DATE '2026-09-17' AND closed_at_date < CURRENT_DATE\n    AND successful = TRUE\n),\nrows_ AS (\n  SELECT o.closed_at, o.transaction_id, o.to_acct AS user_address,\n         CASE WHEN COALESCE(o.from_acct, o.source_account) = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN 'mint' ELSE 'receive' END AS action,\n         CASE WHEN COALESCE(o.from_acct, o.source_account) = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN 'minter' ELSE 'holder' END AS role,\n         o.dest_code AS token_a, o.amount AS amount_a, o.src_code AS token_b, o.source_amount AS amount_b\n  FROM ops o\n  WHERE o.type_string IN ('payment', 'path_payment_strict_send', 'path_payment_strict_receive')\n    AND o.dest_code IS NOT NULL\n    AND o.to_acct <> 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'\n  UNION ALL\n  SELECT o.closed_at, o.transaction_id, COALESCE(o.from_acct, o.source_account),\n         CASE WHEN o.to_acct = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN 'redeem' ELSE 'send' END,\n         CASE WHEN o.to_acct = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN 'redeemer' ELSE 'holder' END,\n         COALESCE(o.src_code, o.dest_code), COALESCE(o.source_amount, o.amount), NULL, NULL\n  FROM ops o\n  WHERE o.type_string IN ('payment', 'path_payment_strict_send', 'path_payment_strict_receive')\n    AND COALESCE(o.src_code, CASE WHEN o.type_string = 'payment' THEN o.dest_code END) IS NOT NULL\n    AND COALESCE(o.from_acct, o.source_account) <> 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'\n  UNION ALL\n  SELECT o.closed_at, o.transaction_id, o.source_account, 'offer', 'trader', o.offer_code, o.amount, NULL, NULL\n  FROM ops o\n  WHERE o.type_string IN ('manage_sell_offer', 'manage_buy_offer', 'create_passive_sell_offer') AND o.offer_code IS NOT NULL\n),\ntrades AS (\n  SELECT\n    MIN(tr.closed_at) AS closed_at,\n    tr.history_operation_id,\n    acct AS user_address,\n    CASE WHEN tr.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN tr.selling_asset_code ELSE tr.buying_asset_code END AS token_a,\n    SUM(CASE WHEN tr.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN tr.selling_amount ELSE tr.buying_amount END) AS amount_a,\n    CASE WHEN tr.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN COALESCE(NULLIF(tr.buying_asset_code, ''), 'XLM') ELSE COALESCE(NULLIF(tr.selling_asset_code, ''), 'XLM') END AS token_b,\n    SUM(CASE WHEN tr.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' THEN tr.buying_amount ELSE tr.selling_amount END) AS amount_b\n  FROM stellar.history_trades tr\n  CROSS JOIN UNNEST(ARRAY[tr.selling_account_address, tr.buying_account_address]) AS u(acct)\n  WHERE tr.closed_at_date >= DATE '2026-09-17' AND tr.closed_at_date < CURRENT_DATE\n    AND (tr.selling_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC' OR tr.buying_asset_issuer = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC')\n    AND acct IS NOT NULL AND acct <> ''\n  GROUP BY 2, 3, 4, 6\n)\nSELECT\n  'etherfuse' AS protocol,\n  CAST(NULL AS VARCHAR) AS contract_id,\n  r.closed_at,\n  t.tx_hash,\n  r.user_address,\n  r.action,\n  r.role,\n  CAST(NULL AS VARCHAR) AS pool,\n  r.token_a,\n  CAST(r.amount_a AS DECIMAL(38,7)) AS amount_a,\n  NULLIF(r.token_b, '') AS token_b,\n  CAST(r.amount_b AS DECIMAL(38,7)) AS amount_b\nFROM rows_ r\nJOIN tx t ON t.id = r.transaction_id\nWHERE r.user_address IS NOT NULL AND r.user_address <> ''\nUNION ALL\nSELECT 'etherfuse', NULL, closed_at, 'op:' || CAST(history_operation_id AS VARCHAR), user_address, 'trade', 'trader', NULL,\n       token_a, CAST(amount_a AS DECIMAL(38,7)), token_b, CAST(amount_b AS DECIMAL(38,7))\nFROM trades\n), users AS (\n  SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date,\n         user_address, role, MAX(closed_at) AS last_activity_at\n  FROM source\n  WHERE regexp_like(user_address, '^[GC][A-Z2-7]{55}$') AND role IS NOT NULL\n  GROUP BY 1, 2, 3, 4\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at,\n       'activity' AS row_kind, DATE '2026-09-17' AS covered_from, CURRENT_DATE AS covered_until,\n       CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer\nFROM users\nUNION ALL\nSELECT 'etherfuse', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-09-17', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'\n",
       "matview": "dune.paltalabs.result_scf_etherfuse_users_live",
       "cron": "0 5 * * *",
       "file": "queries/pilot/8796374_etherfuse_users_live.sql",
-      "pending_execution": "01M32CQC4S1DG8WK4N9K90XYKE",
-      "last_execution": "01M32CQC4S1DG8WK4N9K90XYKE",
-      "credits": 2.803,
-      "rows": 1
+      "pending_execution": "01M32KKMQD8882PW3CHQBZHVSB",
+      "last_execution": "01M32KKMQD8882PW3CHQBZHVSB",
+      "credits": 2.252,
+      "rows": 233
     },
     "fxdao_users_live": {
       "query_id": 8796466,
-      "sql": "-- Generated from scripts/pilot_sql.py; T1 address activity only.\n-- Daily UTC buckets. Metadata survives an empty protocol and is never a user.\nWITH source AS (\nWITH ops AS (\n  SELECT\n    o.contract_id, o.closed_at, o.transaction_id, o.source_account,\n    json_extract_scalar(o.parameters_json_decoded, '$[1].symbol') AS fn,\n    o.parameters_json_decoded AS params\n  FROM stellar.history_operations o\n  WHERE o.closed_at_date >= DATE '2026-06-01' AND o.closed_at_date < CURRENT_DATE\n    AND o.type_string = 'invoke_host_function'\n    AND o.contract_id IN ('CCUN4RXU5VNDHSF4S4RKV4ZJYMX2YWKOH6L4AKEKVNVDQ7HY5QIAO4UB',   -- vaults\n                          'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP')   -- locking pool\n),\ntx AS (\n  SELECT id, lower(to_hex(transaction_hash)) AS tx_hash\n  FROM stellar.history_transactions\n  WHERE closed_at_date >= DATE '2026-06-01' AND closed_at_date < CURRENT_DATE\n    AND successful = TRUE\n)\nSELECT\n  'fxdao' AS protocol,\n  o.contract_id,\n  o.closed_at,\n  t.tx_hash,\n  o.source_account AS user_address,\n  CASE WHEN o.contract_id = 'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP' THEN 'locking_' || o.fn ELSE o.fn END AS action,\n  CASE\n    WHEN o.contract_id = 'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP' THEN 'lp'\n    WHEN o.fn IN ('new_vault', 'increase_collateral', 'increase_debt', 'pay_debt', 'withdraw_collateral') THEN 'vault_owner'\n    WHEN o.fn = 'redeem' THEN 'redeemer'\n    WHEN o.fn IN ('liquidate', 'evict') THEN 'liquidator'\n  END AS role,\n  CAST(NULL AS VARCHAR) AS pool,\n  regexp_extract(o.params, '\"denomination\"\\},\"val\":\\{\"symbol\":\"([A-Z]+)\"', 1) AS token_a,\n  CAST(CASE WHEN o.contract_id = 'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP' AND o.fn = 'deposit'\n            THEN TRY(CAST(json_extract_scalar(o.params, '$[4].u128') AS DECIMAL(38,0))) * DECIMAL '0.0000001' END AS DECIMAL(38,7)) AS amount_a,\n  CAST(NULL AS VARCHAR) AS token_b,\n  CAST(NULL AS DECIMAL(38,7)) AS amount_b\nFROM ops o\nJOIN tx t ON t.id = o.transaction_id\nWHERE (o.contract_id = 'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP' AND o.fn IN ('deposit', 'withdraw'))\n   OR (o.contract_id = 'CCUN4RXU5VNDHSF4S4RKV4ZJYMX2YWKOH6L4AKEKVNVDQ7HY5QIAO4UB' AND o.fn IN ('new_vault', 'increase_collateral', 'increase_debt', 'pay_debt', 'withdraw_collateral', 'redeem', 'liquidate', 'evict'))\n), users AS (\n  SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date,\n         user_address, role, MAX(closed_at) AS last_activity_at\n  FROM source\n  WHERE regexp_like(user_address, '^[GC][A-Z2-7]{55}$') AND role IS NOT NULL\n  GROUP BY 1, 2, 3, 4\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at,\n       'activity' AS row_kind, DATE '2026-06-01' AS covered_from, CURRENT_DATE AS covered_until,\n       CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer\nFROM users\nUNION ALL\nSELECT 'fxdao', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-06-01', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'\n",
+      "sql": "-- Generated from scripts/pilot_sql.py; T1 address activity only.\n-- Daily UTC buckets. Metadata survives an empty protocol and is never a user.\nWITH source AS (\nWITH ops AS (\n  SELECT\n    o.contract_id, o.closed_at, o.transaction_id, o.source_account,\n    json_extract_scalar(o.parameters_json_decoded, '$[1].symbol') AS fn,\n    o.parameters_json_decoded AS params\n  FROM stellar.history_operations o\n  WHERE o.closed_at_date >= DATE '2026-09-17' AND o.closed_at_date < CURRENT_DATE\n    AND o.type_string = 'invoke_host_function'\n    AND o.contract_id IN ('CCUN4RXU5VNDHSF4S4RKV4ZJYMX2YWKOH6L4AKEKVNVDQ7HY5QIAO4UB',   -- vaults\n                          'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP')   -- locking pool\n),\ntx AS (\n  SELECT id, lower(to_hex(transaction_hash)) AS tx_hash\n  FROM stellar.history_transactions\n  WHERE closed_at_date >= DATE '2026-09-17' AND closed_at_date < CURRENT_DATE\n    AND successful = TRUE\n)\nSELECT\n  'fxdao' AS protocol,\n  o.contract_id,\n  o.closed_at,\n  t.tx_hash,\n  o.source_account AS user_address,\n  CASE WHEN o.contract_id = 'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP' THEN 'locking_' || o.fn ELSE o.fn END AS action,\n  CASE\n    WHEN o.contract_id = 'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP' THEN 'lp'\n    WHEN o.fn IN ('new_vault', 'increase_collateral', 'increase_debt', 'pay_debt', 'withdraw_collateral') THEN 'vault_owner'\n    WHEN o.fn = 'redeem' THEN 'redeemer'\n    WHEN o.fn IN ('liquidate', 'evict') THEN 'liquidator'\n  END AS role,\n  CAST(NULL AS VARCHAR) AS pool,\n  regexp_extract(o.params, '\"denomination\"\\},\"val\":\\{\"symbol\":\"([A-Z]+)\"', 1) AS token_a,\n  CAST(CASE WHEN o.contract_id = 'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP' AND o.fn = 'deposit'\n            THEN TRY(CAST(json_extract_scalar(o.params, '$[4].u128') AS DECIMAL(38,0))) * DECIMAL '0.0000001' END AS DECIMAL(38,7)) AS amount_a,\n  CAST(NULL AS VARCHAR) AS token_b,\n  CAST(NULL AS DECIMAL(38,7)) AS amount_b\nFROM ops o\nJOIN tx t ON t.id = o.transaction_id\nWHERE (o.contract_id = 'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP' AND o.fn IN ('deposit', 'withdraw'))\n   OR (o.contract_id = 'CCUN4RXU5VNDHSF4S4RKV4ZJYMX2YWKOH6L4AKEKVNVDQ7HY5QIAO4UB' AND o.fn IN ('new_vault', 'increase_collateral', 'increase_debt', 'pay_debt', 'withdraw_collateral', 'redeem', 'liquidate', 'evict'))\n), users AS (\n  SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date,\n         user_address, role, MAX(closed_at) AS last_activity_at\n  FROM source\n  WHERE regexp_like(user_address, '^[GC][A-Z2-7]{55}$') AND role IS NOT NULL\n  GROUP BY 1, 2, 3, 4\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at,\n       'activity' AS row_kind, DATE '2026-09-17' AS covered_from, CURRENT_DATE AS covered_until,\n       CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer\nFROM users\nUNION ALL\nSELECT 'fxdao', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-09-17', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'\n",
       "matview": "dune.paltalabs.result_scf_fxdao_users_live",
       "cron": "0 5 * * *",
       "file": "queries/pilot/8796466_fxdao_users_live.sql",
-      "pending_execution": "01M32CR81DR8F5G9DFMSBD9F74",
-      "last_execution": "01M32CR81DR8F5G9DFMSBD9F74",
-      "credits": 1.36,
+      "pending_execution": "01M32KKDTN1EGM0PBWWWKQ1C7R",
+      "last_execution": "01M32KKDTN1EGM0PBWWWKQ1C7R",
+      "credits": 1.025,
       "rows": 1
     },
     "blend_users_live": {
       "query_id": 8796476,
-      "sql": "-- Generated from scripts/pilot_sql.py; T1 address activity only.\n-- Daily UTC buckets. Metadata survives an empty protocol and is never a user.\nWITH source AS (\nWITH pools AS (\n  SELECT DISTINCT json_extract_scalar(key_decoded, '$.vec[1].address') AS contract_id, 'pool' AS kind\n  FROM stellar.contract_data\n  WHERE contract_id IN ('CCZD6ESMOGMPWH2KRO4O7RGTAPGTUPFWFQBELQSS7ZUK63V3TZWETGAG',   -- pool factory v1\n                        'CDSYOAVXFY7SM5S64IZPPPYB4GVGGLMQVFREPSQQEZVIWXX5R23G4QSU')   -- pool factory v2\n    AND closed_at_date >= DATE '2024-02-01'\n    AND contract_key_type = 'ScValTypeScvVec'\n    AND json_extract_scalar(key_decoded, '$.vec[0].symbol') = 'Contracts'\n),\ncontracts AS (\n  SELECT contract_id, kind FROM pools\n  UNION ALL\n  SELECT contract_id, kind FROM (VALUES\n    ('CAO3AGAMZVRMHITL36EJ2VZQWKYRPWMQAPDQD5YEOF3GIF7T44U4JAL3', 'backstop'),   -- backstop v1\n    ('CAQQR5SWBXKIGZKPBZDH3KM5GQ5GUTPKB7JAFCINLZBC5WXPJKRG3IM7', 'backstop')    -- backstop v2\n  ) AS v(contract_id, kind)\n),\nev AS (\n  SELECT DISTINCT\n    c.kind, he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash, he.topics_decoded, he.data_decoded\n  FROM stellar.history_contract_events he\n  JOIN contracts c ON c.contract_id = he.contract_id\n  WHERE he.closed_at_date >= DATE '2026-06-01' AND he.closed_at_date < CURRENT_DATE\n    AND he.type_string = 'ContractEventTypeContract'\n    AND he.successful = TRUE\n    AND he.in_successful_contract_call = TRUE\n),\nparsed AS (\n  SELECT\n    kind, contract_id, closed_at, tx_hash,\n    json_extract_scalar(topics_decoded, '$[0].symbol')  AS action,\n    json_extract_scalar(topics_decoded, '$[1].address') AS t1_addr,\n    json_extract_scalar(topics_decoded, '$[2].address') AS t2_addr,\n    json_extract_scalar(data_decoded, '$.vec[0].address') AS d0_addr,\n    COALESCE(\n      TRY(CAST(COALESCE(json_extract_scalar(data_decoded, '$.vec[0].i128'), json_extract_scalar(data_decoded, '$.i128')) AS DECIMAL(38,0))),\n      TRY(CAST(json_extract_scalar(data_decoded, '$.vec[0].i128.hi') AS DECIMAL(38,0)) * DECIMAL '18446744073709551616'\n          + CAST(json_extract_scalar(data_decoded, '$.vec[0].i128.lo') AS DECIMAL(38,0)))\n    ) AS d0_i128\n  FROM ev\n)\nSELECT\n  'blend' AS protocol,\n  contract_id,\n  closed_at,\n  tx_hash,\n  CASE\n    WHEN kind = 'pool' AND action = 'fill_auction' THEN d0_addr      -- the filler is the liquidator\n    WHEN kind = 'pool' AND action = 'claim'        THEN t1_addr\n    WHEN kind = 'pool'                             THEN t2_addr      -- topics [action, asset, from]\n    WHEN kind = 'backstop' AND action = 'claim'    THEN t1_addr\n    WHEN kind = 'backstop'                         THEN t2_addr      -- topics [action, pool, from]\n  END AS user_address,\n  CASE WHEN kind = 'backstop' THEN 'backstop_' || action ELSE action END AS action,\n  CASE\n    WHEN kind = 'pool' AND action IN ('supply', 'withdraw', 'supply_collateral', 'withdraw_collateral') THEN 'lender'\n    WHEN kind = 'pool' AND action IN ('borrow', 'repay', 'flash_loan') THEN 'borrower'\n    WHEN kind = 'pool' AND action = 'fill_auction' THEN 'liquidator'\n    WHEN kind = 'pool' AND action = 'claim' THEN 'claimer'\n    WHEN kind = 'backstop' AND action IN ('deposit', 'withdraw', 'queue_withdrawal', 'dequeue_withdrawal', 'donate') THEN 'backstop_provider'\n    WHEN kind = 'backstop' AND action = 'claim' THEN 'claimer'\n  END AS role,\n  CASE WHEN kind = 'backstop' THEN t1_addr ELSE contract_id END AS pool,\n  CASE\n    WHEN kind = 'pool' AND action IN ('supply', 'withdraw', 'supply_collateral', 'withdraw_collateral', 'borrow', 'repay', 'flash_loan') THEN t1_addr\n    WHEN kind = 'backstop' AND action IN ('deposit', 'withdraw', 'donate') THEN 'CAS3FL6TLZKDGGSISDBWGGPXT3NRR4DYTZD7YOD3HMYO6LTJUVGRVEAM'   -- Comet BLND:USDC LP token\n  END AS token_a,\n  CASE\n    WHEN (kind = 'pool' AND action IN ('supply', 'withdraw', 'supply_collateral', 'withdraw_collateral', 'borrow', 'repay', 'flash_loan'))\n      OR (kind = 'backstop' AND action IN ('deposit', 'withdraw', 'donate'))\n    THEN CAST(d0_i128 * DECIMAL '0.0000001' AS DECIMAL(38,7))\n  END AS amount_a,\n  CAST(NULL AS VARCHAR) AS token_b,\n  CAST(NULL AS DECIMAL(38,7)) AS amount_b\nFROM parsed\nWHERE (kind = 'pool' AND action IN ('supply', 'withdraw', 'supply_collateral', 'withdraw_collateral', 'borrow', 'repay', 'flash_loan', 'fill_auction', 'claim'))\n   OR (kind = 'backstop' AND action IN ('deposit', 'withdraw', 'queue_withdrawal', 'dequeue_withdrawal', 'donate', 'claim'))\n), users AS (\n  SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date,\n         user_address, role, MAX(closed_at) AS last_activity_at\n  FROM source\n  WHERE regexp_like(user_address, '^[GC][A-Z2-7]{55}$') AND role IS NOT NULL\n  GROUP BY 1, 2, 3, 4\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at,\n       'activity' AS row_kind, DATE '2026-06-01' AS covered_from, CURRENT_DATE AS covered_until,\n       CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer\nFROM users\nUNION ALL\nSELECT 'blend', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-06-01', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'\n",
+      "sql": "-- Generated from scripts/pilot_sql.py; T1 address activity only.\n-- Daily UTC buckets. Metadata survives an empty protocol and is never a user.\nWITH source AS (\nWITH pools AS (\n  SELECT DISTINCT json_extract_scalar(key_decoded, '$.vec[1].address') AS contract_id, 'pool' AS kind\n  FROM stellar.contract_data\n  WHERE contract_id IN ('CCZD6ESMOGMPWH2KRO4O7RGTAPGTUPFWFQBELQSS7ZUK63V3TZWETGAG',   -- pool factory v1\n                        'CDSYOAVXFY7SM5S64IZPPPYB4GVGGLMQVFREPSQQEZVIWXX5R23G4QSU')   -- pool factory v2\n    AND closed_at_date >= DATE '2024-02-01'\n    AND contract_key_type = 'ScValTypeScvVec'\n    AND json_extract_scalar(key_decoded, '$.vec[0].symbol') = 'Contracts'\n),\ncontracts AS (\n  SELECT contract_id, kind FROM pools\n  UNION ALL\n  SELECT contract_id, kind FROM (VALUES\n    ('CAO3AGAMZVRMHITL36EJ2VZQWKYRPWMQAPDQD5YEOF3GIF7T44U4JAL3', 'backstop'),   -- backstop v1\n    ('CAQQR5SWBXKIGZKPBZDH3KM5GQ5GUTPKB7JAFCINLZBC5WXPJKRG3IM7', 'backstop')    -- backstop v2\n  ) AS v(contract_id, kind)\n),\nev AS (\n  SELECT DISTINCT\n    c.kind, he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash, he.topics_decoded, he.data_decoded\n  FROM stellar.history_contract_events he\n  JOIN contracts c ON c.contract_id = he.contract_id\n  WHERE he.closed_at_date >= DATE '2026-09-17' AND he.closed_at_date < CURRENT_DATE\n    AND he.type_string = 'ContractEventTypeContract'\n    AND he.successful = TRUE\n    AND he.in_successful_contract_call = TRUE\n),\nparsed AS (\n  SELECT\n    kind, contract_id, closed_at, tx_hash,\n    json_extract_scalar(topics_decoded, '$[0].symbol')  AS action,\n    json_extract_scalar(topics_decoded, '$[1].address') AS t1_addr,\n    json_extract_scalar(topics_decoded, '$[2].address') AS t2_addr,\n    json_extract_scalar(data_decoded, '$.vec[0].address') AS d0_addr,\n    COALESCE(\n      TRY(CAST(COALESCE(json_extract_scalar(data_decoded, '$.vec[0].i128'), json_extract_scalar(data_decoded, '$.i128')) AS DECIMAL(38,0))),\n      TRY(CAST(json_extract_scalar(data_decoded, '$.vec[0].i128.hi') AS DECIMAL(38,0)) * DECIMAL '18446744073709551616'\n          + CAST(json_extract_scalar(data_decoded, '$.vec[0].i128.lo') AS DECIMAL(38,0)))\n    ) AS d0_i128\n  FROM ev\n)\nSELECT\n  'blend' AS protocol,\n  contract_id,\n  closed_at,\n  tx_hash,\n  CASE\n    WHEN kind = 'pool' AND action = 'fill_auction' THEN d0_addr      -- the filler is the liquidator\n    WHEN kind = 'pool' AND action = 'claim'        THEN t1_addr\n    WHEN kind = 'pool'                             THEN t2_addr      -- topics [action, asset, from]\n    WHEN kind = 'backstop' AND action = 'claim'    THEN t1_addr\n    WHEN kind = 'backstop'                         THEN t2_addr      -- topics [action, pool, from]\n  END AS user_address,\n  CASE WHEN kind = 'backstop' THEN 'backstop_' || action ELSE action END AS action,\n  CASE\n    WHEN kind = 'pool' AND action IN ('supply', 'withdraw', 'supply_collateral', 'withdraw_collateral') THEN 'lender'\n    WHEN kind = 'pool' AND action IN ('borrow', 'repay', 'flash_loan') THEN 'borrower'\n    WHEN kind = 'pool' AND action = 'fill_auction' THEN 'liquidator'\n    WHEN kind = 'pool' AND action = 'claim' THEN 'claimer'\n    WHEN kind = 'backstop' AND action IN ('deposit', 'withdraw', 'queue_withdrawal', 'dequeue_withdrawal', 'donate') THEN 'backstop_provider'\n    WHEN kind = 'backstop' AND action = 'claim' THEN 'claimer'\n  END AS role,\n  CASE WHEN kind = 'backstop' THEN t1_addr ELSE contract_id END AS pool,\n  CASE\n    WHEN kind = 'pool' AND action IN ('supply', 'withdraw', 'supply_collateral', 'withdraw_collateral', 'borrow', 'repay', 'flash_loan') THEN t1_addr\n    WHEN kind = 'backstop' AND action IN ('deposit', 'withdraw', 'donate') THEN 'CAS3FL6TLZKDGGSISDBWGGPXT3NRR4DYTZD7YOD3HMYO6LTJUVGRVEAM'   -- Comet BLND:USDC LP token\n  END AS token_a,\n  CASE\n    WHEN (kind = 'pool' AND action IN ('supply', 'withdraw', 'supply_collateral', 'withdraw_collateral', 'borrow', 'repay', 'flash_loan'))\n      OR (kind = 'backstop' AND action IN ('deposit', 'withdraw', 'donate'))\n    THEN CAST(d0_i128 * DECIMAL '0.0000001' AS DECIMAL(38,7))\n  END AS amount_a,\n  CAST(NULL AS VARCHAR) AS token_b,\n  CAST(NULL AS DECIMAL(38,7)) AS amount_b\nFROM parsed\nWHERE (kind = 'pool' AND action IN ('supply', 'withdraw', 'supply_collateral', 'withdraw_collateral', 'borrow', 'repay', 'flash_loan', 'fill_auction', 'claim'))\n   OR (kind = 'backstop' AND action IN ('deposit', 'withdraw', 'queue_withdrawal', 'dequeue_withdrawal', 'donate', 'claim'))\n), users AS (\n  SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date,\n         user_address, role, MAX(closed_at) AS last_activity_at\n  FROM source\n  WHERE regexp_like(user_address, '^[GC][A-Z2-7]{55}$') AND role IS NOT NULL\n  GROUP BY 1, 2, 3, 4\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at,\n       'activity' AS row_kind, DATE '2026-09-17' AS covered_from, CURRENT_DATE AS covered_until,\n       CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer\nFROM users\nUNION ALL\nSELECT 'blend', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-09-17', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'\n",
       "matview": "dune.paltalabs.result_scf_blend_users_live",
       "cron": "0 5 * * *",
       "file": "queries/pilot/8796476_blend_users_live.sql",
-      "pending_execution": "01M32CRWB5ZN0DCC4TV4K87M1X",
-      "last_execution": "01M32CRWB5ZN0DCC4TV4K87M1X",
-      "credits": 26.358,
-      "rows": 44429
+      "pending_execution": "01M32KNCQ6HNS5XF8Y7Z7NKQAC",
+      "last_execution": "01M32KNCQ6HNS5XF8Y7Z7NKQAC",
+      "credits": 1.567,
+      "rows": 389
     },
     "aquarius_users_live": {
       "query_id": 8796497,
-      "sql": "-- Generated from scripts/pilot_sql.py; T1 address activity only.\n-- Daily UTC buckets. Metadata survives an empty protocol and is never a user.\nWITH source AS (\nWITH routers AS (\n  SELECT contract_id FROM (VALUES\n    ('CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK'),   -- router (main)\n    ('CA7RQDMMV6E53P5EDZA5GPWBZ33AMW2ZNO42XLI2RGRIAP4QXIARUOJQ'),   -- router 2\n    ('CB4YHF4ESRJ4XZRXISLXSUZTYY6YPBPZ73MZWSTUWY46DKYW7IGLHGF7')    -- router 3\n  ) AS v(contract_id)\n),\nev AS (\n  SELECT DISTINCT\n    he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash, he.topics_decoded, he.data_decoded\n  FROM stellar.history_contract_events he\n  WHERE he.contract_id IN (SELECT contract_id FROM routers)\n    AND he.closed_at_date >= DATE '2026-06-01' AND he.closed_at_date < CURRENT_DATE\n    AND he.type_string = 'ContractEventTypeContract'\n    AND he.successful = TRUE\n    AND he.in_successful_contract_call = TRUE\n    AND (he.topics_decoded LIKE '[{\"symbol\":\"swap\"}%' OR he.topics_decoded LIKE '[{\"symbol\":\"deposit\"}%'\n         OR he.topics_decoded LIKE '[{\"symbol\":\"withdraw\"}%' OR he.topics_decoded LIKE '[{\"symbol\":\"claim\"}%')\n),\nparsed AS (\n  SELECT\n    contract_id, closed_at, tx_hash,\n    json_extract_scalar(topics_decoded, '$[0].symbol')  AS action,\n    json_extract_scalar(topics_decoded, '$[1].vec[0].address') AS pool_token_a,\n    json_extract_scalar(topics_decoded, '$[1].vec[1].address') AS pool_token_b,\n    json_extract_scalar(topics_decoded, '$[2].address') AS user_address,\n    json_extract_scalar(data_decoded, '$.vec[0].address') AS pool,\n    json_extract_scalar(data_decoded, '$.vec[1].address') AS swap_token_in,\n    json_extract_scalar(data_decoded, '$.vec[2].address') AS swap_token_out,\n    TRY(CAST(json_extract_scalar(data_decoded, '$.vec[3].u128') AS DECIMAL(38,0))) AS swap_in,\n    TRY(CAST(json_extract_scalar(data_decoded, '$.vec[4].u128') AS DECIMAL(38,0))) AS swap_out,\n    TRY(CAST(json_extract_scalar(data_decoded, '$.vec[1].vec[0].u128') AS DECIMAL(38,0))) AS dep_a,\n    TRY(CAST(json_extract_scalar(data_decoded, '$.vec[1].vec[1].u128') AS DECIMAL(38,0))) AS dep_b,\n    TRY(CAST(json_extract_scalar(data_decoded, '$.vec[2].vec[0].u128') AS DECIMAL(38,0))) AS wd_a,\n    TRY(CAST(json_extract_scalar(data_decoded, '$.vec[2].vec[1].u128') AS DECIMAL(38,0))) AS wd_b,\n    json_extract_scalar(data_decoded, '$.vec[1].address') AS claim_token,\n    TRY(CAST(json_extract_scalar(data_decoded, '$.vec[2].u128') AS DECIMAL(38,0))) AS claim_amount\n  FROM ev\n)\nSELECT\n  'aquarius' AS protocol,\n  contract_id,\n  closed_at,\n  tx_hash,\n  user_address,\n  action,\n  CASE action WHEN 'swap' THEN 'swapper' WHEN 'deposit' THEN 'lp' WHEN 'withdraw' THEN 'lp' WHEN 'claim' THEN 'claimer' END AS role,\n  pool,\n  CASE action WHEN 'swap' THEN swap_token_in WHEN 'claim' THEN claim_token ELSE pool_token_a END AS token_a,\n  CAST(CASE action WHEN 'swap' THEN swap_in WHEN 'deposit' THEN dep_a WHEN 'withdraw' THEN wd_a WHEN 'claim' THEN claim_amount END * DECIMAL '0.0000001' AS DECIMAL(38,7)) AS amount_a,\n  CASE action WHEN 'swap' THEN swap_token_out WHEN 'claim' THEN NULL ELSE pool_token_b END AS token_b,\n  CAST(CASE action WHEN 'swap' THEN swap_out WHEN 'deposit' THEN dep_b WHEN 'withdraw' THEN wd_b END * DECIMAL '0.0000001' AS DECIMAL(38,7)) AS amount_b\nFROM parsed\nWHERE user_address IS NOT NULL\n), users AS (\n  SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date,\n         user_address, role, MAX(closed_at) AS last_activity_at\n  FROM source\n  WHERE regexp_like(user_address, '^[GC][A-Z2-7]{55}$') AND role IS NOT NULL\n  GROUP BY 1, 2, 3, 4\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at,\n       'activity' AS row_kind, DATE '2026-06-01' AS covered_from, CURRENT_DATE AS covered_until,\n       CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer\nFROM users\nUNION ALL\nSELECT 'aquarius', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-06-01', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'\n",
+      "sql": "-- Generated from scripts/pilot_sql.py; T1 address activity only.\n-- Daily UTC buckets. Metadata survives an empty protocol and is never a user.\nWITH source AS (\nWITH ev AS (\n  SELECT DISTINCT he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash, he.topics_decoded\n  FROM stellar.history_contract_events he\n  WHERE he.closed_at_date >= DATE '2026-09-17' AND he.closed_at_date < CURRENT_DATE\n    AND he.contract_id IN ('CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK', 'CA7RQDMMV6E53P5EDZA5GPWBZ33AMW2ZNO42XLI2RGRIAP4QXIARUOJQ', 'CB4YHF4ESRJ4XZRXISLXSUZTYY6YPBPZ73MZWSTUWY46DKYW7IGLHGF7', 'CCY2PXGMKNQHO7WNYXEWX76L2C5BH3JUW3RCATGUYKY7QQTRILBZIFWV', 'CA6GAFOJCW4MGQQBUCQUSA3CLIH25G4SNKB2JHYKZCVWZTNW5VXMSC4O', 'CDUX476HQ4JZBPLLVEVRIVXDRKAGYDNDL7OLBE5DD37JXOUFI2NACXJ5', 'CBP67KMDEOZHRJ5YM7DS4MOVYJH66YCEFCVBDBQVNTI46X37DU6KOZMB', 'CDRRLXLBXYVENKIUCCTFUT5WW6BW43NJMAPEMGU6VIU74LV6526OLS35', 'CCFGZJTHQZGDZP5PK6WMLKHKJ72ACSVMJGCI2NFR7Q6EAVSKWLJB3ZH3', 'CA6PUJLBYKZKUEKLZJMKBZLEKP2OTHANDEOWSFF44FTSYLKQPIICCJBE', 'CCLZQDL5LY2DBPNNFBRKPSROGFGTT7Y7AI2SM6QUI3SUTTKA672X4PDF', 'CDE57N6XTUPBKYYDGQMXX7E7SLNOLFY3JEQB4MULSMR2AKTSAENGX2HC', 'CCF76DJMOL56MGFFKQ4U5BY3RSZC37R2F5F3NIW7MPUOKFRY4LOKN7EQ', 'CDGAAOKSMARPIFB4N54BBAHXPZ7QMESGUUSLZ6QGSFFPFWDH35D72GFH', 'CBFNCIWG4HEMGSAAR4DEVS2DA7JWQYH5SQEZ6SR74HOZCSP3JNCSFZEA', 'CDU5EDRLORSCPHZDAEVHNOT7EMRLWSGHRA3WLCXFGUNVVY22PLEWNBBU', 'CCWURHLMAE7M7KBB6JAEMHGZQVENXMF73VTDBBFPK52Q23JRFUVY4JLS', 'CBHWO677JA72CGF2SPTWISMJP7PQTT7NQBIO6W5YQ62UJBF55IN34F26', 'CB7L2XGIQMJX2VO5BEDY7Y4BF5RNXBGA3N5QUEMYGIFHJOXRHDMF2C5F', 'CAB6MICC2WKRT372U3FRPKGGVB5R3FDJSMWSLPF2UJNJPYMBZ76RQVYE', 'CD4ASKG2XVZRAUXSXPCGUSBIX4JOC2TNA2FDBAPUNJB7RSUG5YGRQRSF', 'CB7FKGSTHP75ORTIZGGMVUTQLEMVTSEOI4QORQPCABJSGTAATDFCE2YV', 'CCSY43EHJAHT3NQDYKAMJXRFBEEH7OXDL3J3VNGO33UUSEXWNN27GBIZ', 'CDPKDMH5WQDVNN3TVOYAJLPQ27HVPPHWKD6C5APMZSRFAJAWZYSEA6PB', 'CCZIETBWABI4H7NONISQZKGI74FPUKNLCOIWQJ2RZIMCYIFOJAS56LTN', 'CCE5SYJ4EJDVN2ZNB5A3DE7UOLLHI2I3J5FOFO6U6BFSXRGMYQ6GOTH7', 'CAQVZKCFWX4HT3C3RUXGR7OETDKRMN433M2QWUXC5X64WE2FKDUFA7GQ', 'CDFVWNLPXHEARNK7RT6Q42TYOE5FC6N2VPXH5GVJ7N6H2PWRKKNPOENC', 'CBUTKQ3Z35FZLUKODPV7MS7NHWA3ED4IJZL5GOBQQQIHQIL4AFGJS45O', 'CBSJVUIJEWSNJ7GCDMRW22VDBDQAG4ESR42ECZGB6X4Y2J6C2UAR6LSY', 'CBPSJKMTP5SELRPOKQECDEEMSMSWJKKIRUXKOOBHVWDTPNR76O4E7BSZ', 'CAC56QNJ2CX456TPC5S4MSOU3DBULG4TGN7AZ2SAYGBLD3GICFMZBIT2', 'CASDAEULZPRO2GFVBOGEWZNNG2JR2JHH4ORBDC7MYOZLBKF4XB7SALYC', 'CDDLTOODRYTIJE4KPS4BIIXWPLVMSIYVG7GE4W7MG2UBQ3QCCET4SUFA', 'CBYHINSSG47ODHUV6ENPZRCGISZE6G3WKZV3OOVFAMFEIRTPR5CLW7QH', 'CCHOYEP6SGO6I6DT23TPSN5MKUE3O7OT7BXON6KZI5CD47PEH7EYX5GW', 'CBA773WXS4IYY6UBRB5UYWUG2AVJCJQFUNY4R6V6LRXGSB22PPI4JUHD', 'CAFELOFDTDFZUCLQ75ZBIQO2JJOLJTSDMGCDPSO2HXAU55VPJHE2IS5K', 'CCMD6523ITIZX7WQEWCGDJE7FHD6AO6VSLWJ6VFLLFFPYENY6CFREMNK', 'CA4AU6O7V5HL5SPDRERKWRUG22KIPVOA3KOHCWZJJUYQ5NFKC7OAUIW6', 'CAQENB7J57NTUWKTPDJ6CRIMI734US7Q2U2VXRWTNMMFSVXDTPWEUJGU', 'CDPBOIGPIMZW7ZUHXHDEIE5FN4GXC5T7HCAHT6NKAIXMNNZWPBHC3W54', 'CBM3E3AV67FLU7AJTEYJCR7VOW63KKTHP4NYMMESXRGP5BIHKMCFZ4C5', 'CBFXFTFLUUIBQGHLMSI762JUD34NHLFZ5AGPLEQ2WJ2CEQANDPZODNVN', 'CAALB3YN5DGHR76IEUERNLVRCHILENPCZ6SSU7YY2F4MY5WTYCKSYTTU', 'CANNGX6237WS6E3VS5UVY6P547D2BTZ5PEX3XS2Y2F4MTB7EHHRJILQR', 'CAWRUZOOSKHS5AKN2PLRTCDLBCT2RPFKYL7DRAI5Q64HFIKUGK5YNZFV', 'CBNLT7K2DUJ6U4HR7RABYQSDZ7AQYQIHBWO7SYCC4XEUOAF6OTOMHPRT', 'CBQRTFL2DNYL3DQDFL4FYGY2RLX4QXIRE3MHRRHB7O5RF3GHPVCZYYBZ', 'CAI3PBFR572FUXEYCZSTJ4HYTL7KF4EYTKHJB7KJSNYTN43BDFPTG4TS', 'CCP3PPN6A5GRAGZTQAXYWSROV4QQMEE3FOR2IXSYYVOXCXPMZRB2QAWZ', 'CD6VHCKSUPGQVQPEQUI6EAEO6Z4PXMFTPHW3UTAOF7W4UF7TH7ZSKZBG', 'CDRAJL4B6PV3U22H4VBM3PGOEDG6AWCDBJHVUMQSL4LHH7RF4JZPTLV3', 'CB4FDVJZEL4KE4ZEY2BSQ5VTOXZDPV34ZT3YO2AMW7PPOTH5ONF2GXHD', 'CC6MJT4233D354EZTYWRTF6X5LS223C3TEUPVEA6G5KVTV5SYSEVP44S', 'CCPHQ3GS6TMBGEOFMXARRRQ35LTAGM3A4OFW7EMRZG2SJFSBD65XZFF6', 'CAF63CNDJBATL376WDN5KUNN32JQKNYC26SQ62OLXYMAWBYE23P6M5WT', 'CDD3OQDUVL3ITL4ZJF27WVSO65PFEQQ5AOHEUPUHC7YNL7VUYM4QRLZ5', 'CAGG5WHOXR72BDDMLIN56Q6NP5SBJQJ73RMOOIL255FNRFWZO55MATSO', 'CB66IZEXJMKBAUJDIQMNGBSQBHXKUDPBIPEINZEOUMOEKC2NKMSFVFZJ', 'CCZC4HGM2BW7TIIS4KBDQEZX67DFZLOL6TZXGUGD6SJZS6IJ5JUAEZZR', 'CAI57H4HYE2TNI2MM4LYAZ24Y3XLSBNWTSNDKNTOYFOBHYNHTMQAXN7W', 'CDOGKTAHIINHYDL3BUYDVKIQDDJI35IBMLOUHC3AZC6FNJFT5ZC7BYDJ', 'CCOZA42SRNHEMT7SBPAX5BG7BJXTTCHJ56FYCQRYB35CP5WUVEXM7B3F', 'CCWNKTTMHZ4VRR3FYQT3G253MHOGRLUEVTO6YPENM7ZN65DGC345LHI6', 'CCJY3VRDZ55SQVD73RO3D6LPT33AMUYAQDDTGN7OHXAEDPQPRZ2PCDJT', 'CAGONMIX4RL2MPHP6INYZJEFIZ4NQLE4BAU22EJBJ7HMN2QC4ZP364ON', 'CBBIRRHJGR3W4YTDBSURB3X7GMA5BN3TO6DZJYKXWNFMXEMPXYQCNYGU', 'CBRNBLCGEYOEXD2JVCT5YEZ4RZY3IPQGYEI2D4MKSG7I62NWYJFZ2JRY', 'CCS2D4NOERLQH7HL23HMMHW37U366VVTQAYHLUGFKLRUWMRIRP7RQ2MF', 'CCON5USQZ2SHOILAGTH6PAQOECE5ZSHKWY4ECHVQUPQH6ZN42J7NTA2N', 'CBSGKBPK6CU2ZZKI4T3GRDWA2WBEQ6ISXI5MWFMAO5IKIYAHOEUODPHN', 'CAQODUH4XNX2NTFVACRMO4UR7MA5RLSZA5ZQTHILQYGYYCFQ3LUATIGM', 'CBRGFMR6QBX7ASUBO534UDGOUB2SDGRL7AAFXFYBQ4DT4RJTWQG55W2T', 'CAUCGDPDPQL4EPMPPFST63VBDVN6H5LMDYM3OTBGJQZTCTM3DE4IWWWB', 'CDKVJYMN34ZIEXSLNFYHVAFF6M6FM5E2U6OHXOTBKH2WLBULXOE53YDP', 'CD65EROVLTDU2DWM4ZUJF4NHK4A46DX2UAOGCV7YDFPCSLFYNH57KGIY', 'CDSVWH3J6C4FJO6C5CE5LF4VFPIV5WLMNQQKSNWJXNKLONXK5PAZ4KAG', 'CBRXOYKXPQI4EEA6KA35TUIYN5OJLNWMTIVDOMNOIL2BG5Y5LEDHUU7V', 'CCQ6SUAEW4REXTXI5ZL7F2UNXTZTQAORQIPCCNWQWT3SGNYWZTTDLFTT', 'CD656U6QQK5VEPB4ASHALPMP3LIM3Y6ZKBEKNLSPIO3FBO6YIDYQCM4R', 'CBW7MXDIGZMY6UZN6T7P6J2AFGOVZQ6ZMF7IPHUAPJBD2S7J735UI2O6', 'CAEG2CDYEDSSZKJS7MWNINVBC4CQZGIJQ36OKSGE3A65VRSBDCFSE544', 'CCMHVBZGY65EIFQZLZFRWMPMM23MWK4P5RFKDFWEPA5NQHENBNWMZETZ', 'CCBB55HJJQNOA56FT37SI3B6EYJ6VMW2RB4BZJZGTEZBT5QUMN3DUGCQ', 'CA2JB3HAM7PWI2WCOW22ZEDKKIGJEWUDIZBGICITRDN2TAJ2QLWVTLXR', 'CCO2HI5HGF6KVMA65DOIN52BWA4P6Z6T6HKO46KGLZXXIUB3KZ3K5W4E', 'CBJG3RM3KFLJQIFCAJMCK57FY3YOQ2ZDKEAZEGAYH6JOCPZONBYJOXFZ', 'CBL7MWLEZ4SU6YC5XL4T3WXKNKNO2UQVDVONOQSW5VVCYFWORROHY4AM', 'CD5N56WHTHT3XOB6BQBEK3OQFJUC3T5XGLIAZOP6GTBXZ6CLTEQKFY5Q', 'CBDSM7QDGYEK3DRM22DH6HG5CSKSCKKOVBJR64UT3GSHOOK6VYZMSLYG', 'CB7VREC2IIH3JWQI2W5HL76TZLVQYTK2MW5M26UGRO6AFP4V5XMIGF2P', 'CC3EWBMN2RZVWZT2UPL6PRU5LU5IH4NM2QVV5IY5Z4FQSDAZF6DWTRB7', 'CC5E5HX5K5ERF6KIKGXCT3UPNBKI63YHHQRBB4C4CKEUWL4FA22VOJ7L', 'CCDLVANSRYQ4IVO3A43UJAPKIWU2324D54NKGHCWWVCVCX2CNX2K4TAR', 'CASUGCN324QMLAPWG5IUSXCFD3GZSREDEH54VJCP5MOBOEXDKWSYR2TS', 'CCGYZEVHBYZVUD2C2VPREQRIBBV7Q46CKIP375VZTWQU7553Z3X5YH73', 'CBUI26GBSGZ6UK7OA5KEXYVZFBGYK5YNRXU2OTFZA4HPGGN44K3LXPXE', 'CCPQAGAPB6J4WSO4A3SBRROTMYPS4YNBRSNHVNLV4GBPSBL7IOBIQL4Y', 'CD5TL5DHDYBUZKQDCUZNO4RV5SQMOG75O5APJZNYOZJJQVHS3ANKDSGQ', 'CCSNQECGJQ7O6HZJ7IUALVIEMS7F4XUC6XPJVGEEUH2V6SCXG34M4BEI', 'CBD5B2VXYEQUVQSANUEECOTHUUA5LWFWNE4XCF3O5S7IC6HG57K4M7W5', 'CANOS4CG7YMDIREDAQIIB2ASVDRTIEPZ36HRIXXC5CDZE45XE4OG4ST6', 'CDTWZY36RYRZZLTG4AYQ2WMUWQMGSZEH2TKMXBDPW2E7FMNXCU7N3G3K', 'CBLPZUFE6WJ7FNOTZINEWFDFKHGDSQZOLVCYLGTAX4JC6OABNRWAFTI5', 'CCX2TYR4AQTPPMTZOIMP3YIBHAYLLSTXVP47PAGTL753PCQFSKV32MIA', 'CCRVANX7N2A4EZIDFOWI5SJA3B37SZ4XGZFLNIP73GN4Y5WZWZ7KI3BJ', 'CAJA6SK462MAOIB4ZC7WSCJDOKOV64NXZHEVFHILX7PLWVN6X2QJN5WW', 'CBLJSRDUEOST4R6NN6CDT3VCTT5MKHLEFR4I2PQYCZKYDJDCF3TYZZ7B', 'CDD5SQ7AQ755HGVNK4SOL5EWZ6PNPCZ7HR2XSF6WU2KDX6ZGTYAS3IKE', 'CBSSJUU3QMZDSUYHL6K7Q5446LYWPTXRWJZFM2HBTATM4AUU5VNHA3RK', 'CCZ2ZX4VSPGP3VAECUVTIMUORYZCOI7OL2E7CT2YKPWOI6CVUFPLFV7Z', 'CBEJQ2XDYBIPHTKF6E3RZ54UDV3AOM6LFS7NPS4LOSHWDGX2AJOYVU3B', 'CDKL2UY5KYE7EOQJTQH4YCV5SPEIVSXWCTW5DIPLB2CVS33L7UIMYH3N', 'CCZ7COTQVZGHNPYCCZBGAQS3DZXNP665HCVT2EO4HWCDQGP3SP3Z6YA3', 'CBW3BURM3T75RJH2RHULQMTBOLPD42WW6DGB2CWEVT6ZHBAFNGWNRGWC', 'CALRUZQCHYNLXCXWBANOZGITWLYMDK7FPT44EDVHUTRWBQ67YU4N2Q7C', 'CDRQCKVRPFNXUKXKS6TUFSEPFLP4TT5DP72M7YNHPHH2SVFWUQHVIJ6Z', 'CAIOFLKJ3DQGZR2C2OF2QA46ILIUT6ELTQIVO6GSQRTKUVL5B2EWMA4N', 'CCEBV2EC6Z6TE2632XXTEBD6KA2U57LRIEDGV2SU77BOF2HKKB4HDIM2', 'CCHNAJ3OFBBWTAOI22DAR5ZDXUZ55DUSMCANMEJIHX7JBA67EZUI7FRV', 'CA6GS7YVJ3FF4LYCAZKNFF2MD473DFE4KOOKSXAKYHFMIZZON5HKYGCN', 'CDPF7GMA3OLVUBLEVKNKXKEFSS3EQAXN75RHT7DR4SYIHFS5LH5JOTD7', 'CAADCGQTOUUW3K3ZAKCNLTADVCI77VBPTSLWCIK5RB3BXVTAP57UWOTC', 'CBL2RMHUTL6NHEITTW634NUE2LUMQ7W54KNY52QTXUXJBLFBMFCF2NVF', 'CA4EA5ARJZUSDDU2A6VHOEMFUYQOZQABIT7BCBS63BC64WDLB5GFT3RW', 'CCTSL4PIN4DSIIY2R5JX5GSZWFIPWWKKTGIYM4IZ6UBU5RSJTUPRTWAO', 'CBPAHOIHE55EUKTQGSY23WEHXLIEBKYU6JUCH76WQ67T3WMTDEUBCX6U', 'CAIJMR4AGDGHIDI44MCCVWTZECXSCUFVVF67RV5KMPTC4PQLYKTFFYUT', 'CDMGXLUASLRCSMIFYTLNKGASA3DAU4UA6GWAJQ7WQIFL3HND3WXU6ZYU', 'CCC2KUPDPTIBWB3GBTMJB6IKBNJKWT3WUDYXEWVDX2KB4WLSRL2WGNU3', 'CBC7VX5EKQJBYAMIWYFRQQG2K2GUYULXHO2Y665YHPFZLWEPXBNI6LR7', 'CD3LLRLBD53BPVKZCRCXGQ5Y2QVVAY7TLCZPLAT6KTWT6SD5SKETRJVU', 'CBTGLCDJ2DFOZF7C73ITBACMNX2MFCT3ETJALUSYFACKQBTKIOLXXUQK', 'CBPDULTUWWPFOOJAVJIIZIZH5PRSIEPWHYDW23RM72SSINADWYO6DJE5', 'CBYMDNTENBCYE5EYO642ZBTRJ2D5SPY3PAJO5P5BTYYWUVOY5N37A2OE', 'CCPR2Q3F2TPOVKPKTAHGLMMWPL5RBNBYDWGGUNBYP7KV7W245IAJXRI7', 'CBTQN4N3DSAGPE32BUVXBU4WBCXSW25L3NIICUW5BXNG2FSQIJ7EMQDX', 'CCAJLP7LGRS4QUBPDI3JDY66IQLDBKWJW6Q5OTI7C74N3OJSOIYEJCDB', 'CBTUGNROCSTKKK2HUI3Y5Q4PNLCOXQGBT23S62FA6CMDZHJWY6F7KY6R', 'CDSIQQSOHGILXJMV3OBTUCIMI7XQBVGNKWM5PVVC7ZGWYUWYABKLGXVO', 'CAKJT3HBDPOVJW6F5KJO56QXGWEZ3FHGUDBHBRQACWTBFQGWR4QXZWSN', 'CATP23X4FIYDOSPTGJVVI7RTINYQUA32UGG5CORAXDGUMJCHQFFCERN6', 'CB6IBY244DYNEWMG4P5TVXR44CXL5QAGLH3QIJTQCT4MSDXKC3LKRMC5', 'CBC5SYJYQRPBP7CV5LEPZKOZWAJWMOICO4BUFAGM7S2DU5YCSMKLTDA5', 'CCGC7E3J5UB4JZ35VMDTGM4GPVNOI4XU7UCQMI4E3I2DP5L2MAZ6JZT4', 'CAOSZ5OCJYWPUOGFAFNU7RCNWLMFGVKFOOI3SLKICNQCP6URLW7QGOCO', 'CBUAQYC3JPFSDMNIOS3IA7VJG4XMB3ZSHLLDJJIQHAOQDLWM2KPOHRAR', 'CDZJXJN3E7BGKAEAVTX2OZXW7QXIKTAK3UNU3R5MAFVBUHT3IRIKAYB2', 'CB37QM6EHVBDDNK7MAVQESV7WPLKV6G36TR7MHAOYWPZXLPQUWSDOK4E', 'CCVKDKAIHBPLWONBSS5DRFFZLP7WWAHK43PAA6XVTGHF5I3OMGVSBCDP', 'CDJ3J3MSQIJLMZDBMXNH5MKGOFCL2TTLFSSU5SFI3PYYJDFHWEH7EB5E', 'CAYHCKBYLGW4A5EE5ANDRDRKMO5UGPU3CZJMDLCKDC3PIRF6D6EVVHPN', 'CDQVZWIT4ODRWWA5K2YWIFX7Z5KA76ASJP6UJLLAPM6DWLKU6RT6THHL', 'CBKENQ33KITYE4JKPAWALHU4KGWV5AXQLJFUNRNIDGCRLRDENX6PYVDE', 'CASL4PYESGRCUJVCSS33DX52JBSRWSZJEADCMPNL5CK4UWJJ5WQPAUMP', 'CAC3AUH3A3ZCABCOPDCXVJXSIL57WHAPGUPTKAOMSNFLAVE7CPPGNGZB', 'CB7NBRNRMSZW576ABOBGCZCPC6RB6FCFNJTABLVI7FRTIBWFE3MKPBEK', 'CBG2QNHFV3DJTKHGABZ3ZRCDWXE6JB2FXTNVXPSOGZUDHTTH3TQ7CGRM', 'CAGVJTI6LQNGHH56RZY7BHQ2S2PGPCO4HVVTJLJLRUZLCBEU76W7FXOY', 'CC2QQVENM4W4C6DW4WZGMZSW4WI6ZWFISHRWVXMTWPIAHMB77IOIP77C', 'CBMOKFM4SNJ2DAUZ4M5MJSP76M2A6A5V5CTIIJLM7TTPBRTRTLTATZ7O', 'CAFA2BRSNIN6MVKY736R3237W6PFSBQMWOJ5HDTCF3Z4YCCCYLV2N46R', 'CD47PNGQZFFQ3KMQJXLMK6MBX36WEIR6OIFRCCXRTXJE5HOA2GWL7L6G', 'CDCT6W2XW64ZCIUEMRG46CJVE734SZDL6WDEH2QQOABBNU2XUSCTQEMR', 'CANI4O7DWL52SXP6T2NF5OCQ5A5LSV7WV5BVZPYFTAGSPAB4TTEOBLBN', 'CBCIH74PZSVS4B75DI62X75LG7ZGM6WGAORBMNNJ2OZGPURE5SNI2SEB', 'CARCLMAPEV4GYZ3TTFJDQHSNC7PH4G22UIMMER6BZW5H2TYZWWMW7FOS', 'CAECPXK6XOZT2TPEZ52C2VJOMOTSMYY475SFICTWXHDN74UXJDKMVKXD', 'CADN2Y2HDRGBRSZKY4GVRT2XD34QVYIMNVLSNQKSYS3T4RUX7LBIDIYE', 'CD3KLMNUKIFGB544YA4WM4MZYZ52TQR6EOH6DBX7PTSENIVL5GR24YJS', 'CATTIXSGLPAJQAWTNRRE2QZGT2NQKFVJWBMNFPFCDHVONXWAAQTS7T5O', 'CA262ONRV6P2IZPFVCTQNIU5XZIPZE4RLZNSOVJUNFUWDQR6MBNKS3IB', 'CCI5UGNCHE5PBINLZKSFFCMBUVJYWYDPKDZS54JD6TGJBA7MCG3YXNT5', 'CDCSXULBM55C5ZRP6L4E2T3NA4ALGVXNN73Y6HJXTHHCDAKUMIHGPELO', 'CD34VG5WGCNZNR7K5B4JUZY4UDBCEIJP6QOWQ7YH7CVE7QSJASOLOJ7N', 'CCV2HMOJS43357J7ZZ7XNTEUK4XH6OZTDUPZPECDI5URTMRT6Q6NJC4F', 'CBNC2YK4GJVKHXLREPHWEP36INL5PGZ2S2QOCCYFNMNOTDX3UDA3QAX5', 'CCMGGRYXB4W6UJEIUDYSWXICG6VQGVGNRFUU5MLUJAKXGVMMSSZCURB4', 'CB5PXRKQKWOHJ4P3MDCNHZA2N2MJQKZ2EU2C3NE5WOK6QQH6OLLFECNI', 'CDRUMPLWTENJEENBHQL3HWWZ3C3X53RF5VHI7N34A7GYVOGVGS7A7YDJ', 'CAOBPWLHSERILJTLOH4APQU3AXUGQBOKLWDEM64A4AZG6XFSZHBEREDW', 'CCKGQSQG5JLZBMYMB4HT6M4H7FUC3NK5C75MIHN6627LRAY5B2SYL2AD', 'CBN2N5L4UM5PPQE5UQNC3HVGT56TDQMAXMT3LVFMNN6XLFXZMCJY6KOU', 'CAEWYN6FTXOY2H7HZRE3N5WX2SQNYHC4AW5FUOXDAQLFHKP2YOPQXYGS', 'CA2RSELLORUEXHWP6QRLT5SQM4UEHWZULQILUWFRLRFQQSPPLUHE2KWC', 'CA5DL7ZFP55STN35ONADCOUULUKKXP27IKTGJRAL6Q52KSIB5FX3HYQA', 'CAUP5HVO6YI5UY26ARUCZ6L27AQVSLHRRLLCNIBQUSPHEU5Q4CRK3JLA', 'CDE75ZVRXSNUEDUY24AV32I42GM33L4GFAXHQSE245W72BTZJLJHVG2H', 'CB6R77BOKO24UOQNZSB4UOMAJ4M2I5T6LKEDXS4TQZLJXD6MNA5WMOWB', 'CAZERARL4EWIJYX2GRCJF32LG3S2QPL4CMPIGHNZHFAMMNXEARAY5RPP', 'CDGAYA7ZEK6E6SZ6RN3S5ITD5X2NU4N2X7PTR5SFXAEDTI2PGBZX3UMU', 'CB64A6FEWKK4YRWRBNWJDZ4EZ6RI74FB3MZWNECXIBL4IYC2USMF2ELV', 'CCJTQJLFA3NADXNBR4BIDV5NMFACOMUES4CO2UUOXQGMOP4S6RFL5CAJ', 'CACIDXIZXZHD2KM27ETPAFHL4N4RB7MNQ6RHKLNACNFTQOMNZK3FE7ED', 'CCLVDZIBCMB2PXKOMRG6IEBD2UMSBEVRPWTRWUIBIZGGKYVQFQ6FRYTB', 'CCYNRWTZBINZZ3CZ6FYAUKRGTRVZGCIB33CIGJHV7MFPWPNK56NTAXEW', 'CBDRLPPJBF2LQNGEEGRBHNLFL5QCMKLKP5BUCQVX3HKRTXODHTXEQRZ6', 'CAFHLHGZXOVNCGFJ7DOXL7JDNMBCEZKDI3LS5NRQH3GXC7CSIMQZHUSM', 'CCPJLNXL6YBVNPKTH6ZOXBWB35GTKADVN4WQJJWLBGWORZ2EBK6VOTRL', 'CAJXBOGWSRFT7Q7ZKHVTPWGODOBBSPYQVKN2WSMN2WFMPAXX2CETEBAZ', 'CC7DVVEUOQDASEXFVZZJYP5BUS2S3CYBQOSFO7USFYLUZDVCFFZ3QUMA', 'CB6E2TJAPMALVDDAJ4IM3MLRSXDO73YEH636SRZXYWLVMZSCA4THDMYI', 'CANUOUCL366FPFUY6VXYMV4BELMOHQNDO5W5IPC6URUQICZGGFDBTYMI', 'CDA5MPSMEEXEZ4AHQULAY2V3VFO4M4JWC2C2MMCHSQUMK5DP6NSLAVHO', 'CD2UBY4DOGL3FETXUNMSSEGKQAL35ABFG6WMO4P24GK2SH3GULFRCKFA', 'CAQXW3WZKODG7DXFDFQ2VRY4EVTBBJLJ4PEQW7DBSZHXEJC7542HIRQH', 'CDMH535JSD224YXPET3B4SJOLXTQQ24GRSCWACGYBKSH2DKFJYWI7SUW', 'CA4IY6G3V6JXS4YENHOFLTU2IHWST5ZFG4XGIDGDS6IXUORTQIY33EAZ', 'CDFNPMDIWKCTVCDP2K75RI5J4FIKLTSZBWBNLS4BQVT6AS67MRD5GV2V', 'CCD3P3RNXORFN64OH46ES6EADO7NUDWXUXWCBU42NN7V4SUPXPFJWED2', 'CDTDURXP62KOZNS7VUZGY4Q37JGJRKC4CMCT6RUNQVZDEBJQZOQAMFOY', 'CBHA22UACTWKPR7CPNFXYVX57QXQVOEPTWKBSWFQAPN7HB5GEBKRJB63', 'CA7JPXK5XK4DMGPTDUP4MA6YWYGRX7SWR6AJ2RLMDKUB6Q5RBNFJFSJP', 'CA76YPZXQFP6JGJNXYQI4SJRDH5ERCYF5AG7OYXNUTC2IBZLZOAOK3CL', 'CA6OBAWHRFU3O6VTJONDYCS2XUQ4OVLG2WBDS3K2CETT2ERRDQ26RJ7S', 'CBGSR4FCHGM5WXDIY6YD4T6SSS26HHGIJCXGVIQ2PFSO7EPLMKBZE3KW', 'CDAQRXMA4N2Q4DYGCLMCINE72SDLE2LAW7OSIZANM76NHHG5DZF7W5K6', 'CDNMOZVRXKZ2JCVTDTGXZRWH5EVGXBIR7NDUNMAME4ZYFRIU7DPBXLDF', 'CARBT6Z25NNE7PD24BFXXXMSRYZUGFA5RHI23PMSIXBUVJZQLS56HJLP', 'CDM54I2UGJBIDCAHITKTUV2PKBLAA4G25AIZNNOW24UTHAAV5NSXNXDF', 'CDI54BFBGPZOAX4JARDQIHKRQ6U73SAUPLQB26KUB2J7JCBK2HDCDYSB', 'CA242XKXANKC46P53M355OPYWMHWPPTKQM5T5DNMOBWJMHOWDLNPJTN4', 'CCQNVBS5ETNAINQQEACPEP2ECG3ORA27VG2CXOSYV5P5EDM4JNER6X3N', 'CCEQJEUOYHFPY423PQC56UFQK4EK5JEB6A3I2MEZ25QGR5F3P4DCGN62', 'CBKAMBR25ONQLTJO7NYMJUMAHRJOUR5NQZGQQ7R5UZALTBPPYWDRVIZ5', 'CDRPQKQ7Q6IL75FVVHYKKDGWEDBRSTIPLWMECFBCNUG22VSXXZ6ZL42L', 'CDD2VFQCJFZNPNQ6YH7A4PWKA2QODQ5XQ4EO3K2D7AOYQRTHNZZWZPFR', 'CBTJFBRZDAG6SJFJHPUIGCCC3F2KKCXC3G3H2BTG6B7GBOPTPSI4ES3O', 'CCPMQFGSSMTBLHO4SLDPRHWAHSWDQICXQPW5WM54KDPB7IRWEWLZJUQY', 'CD2O2B6PWKXDVFXMHXHQMF25C4TWOSQAENA7DNFR5G27F5CHJ7AJP5F6', 'CCNXGPE4AQCSNEBZO3XJDKKDI3CRLYMVS6UWBBTVDLALLWMJEXBORQ2A', 'CCIWM6V5NPVMQBTDD2DWVTFLJHV2IB7I3V6KLNDFFFCZEHEPC6FKNCXB', 'CDCZJS33SL6ATRYZOSGHTEKJMGRNAQKMV6LL36JUKKEPX3TAKUJL2LL4', 'CBXCELPGAJPHC4XXYBOYLWNLH2IZBUNNXCR4IIBNJXL6BSVTHSLAOJYP', 'CAM7NWR7INGYXWJHAJXFPW2BDLORKDXAAUBUTYE7IYUQ53HIHJ7MRHVM', 'CCLGEOD6PIQQNYFIU4PQXNGM4455HHBD4MGINN46M2KTIVOWOWDTITCQ', 'CCJ3XJR5VODGJHH6BQHRUVOA3FWMQRQOPLUZNKLSKFKYELZF767P2DOR', 'CCPVNWJPBIKEYSVDF4DT6P2PK5RQDTC6JULZYRTUX3RDS4S5MS5KKSOG', 'CAP57XRSVYQ76M7LBDDNL6EKZNVMSWLWQIOXDD2XWF7ZAQAOZEWROCVX', 'CC3JS5VIMZWQENG5OC3OFLMMMC7JTDHXA45M7IEPJY4ULQDAI7DA2IFP', 'CDGODCYOS5SBQMHAPEFNDVIR4ZOHHVACAWXYUZRLW4DJ3KFPQQ2TVEB6', 'CBWTGYOY2V372AWSG7EAG6Z4R47L7OPYDJ7Y5TDYQDHXA5EJBRNKSE6C', 'CA27UTMXHLQPISZUBIDCSYLAVCCMDD2F2PQBPVTVZBYRTEHLSWLTYYU3', 'CDVJJCKX2KZ2SIVXRVXJZOPOGYF6J7GXY3F2IHYR4UW66DDCRJYAQCAH', 'CBV5CUMDI6KI2D5BY4C4ROG5RJKEBOKATTYPWSRXIZE2WJHA7XEFALXL', 'CCXKWPUUM5VKSHHBGYOLZHIEU5DAXINQNJ4Q4IOTBYEEWUTA5S6A3S6A', 'CBGCTBE3YMCUXRYIEV7F2ULJYKKYFTQJXU7P5G4IMMVJN7APRY2QH7Z6', 'CAMIMH7AIHOT7EUBXNM2QAX6E7LGDJN63D4DTOH6YRRWI62NDYJVPJ2F', 'CD2ZV2IM4AF25ZJJYLPSFVKMBXGTJF5ZEH7KV3Y5SI5SVTLYLS7G24GK', 'CD3LZHEYSGPK63A76ZXQCEYXBQZBAV3X4YOKT6S4JL3KBVB4B2JP5U2L', 'CBRGXAYNKSFRM7RBIYRCVMTNMAMBJ6XZO3XHR7XAQPUWV2KMF5YNS7FL', 'CADFWSBBD6VMCL45DEPZ37X3JNXOZXIWEVJJTHMQH3UEB3JSQVJSPG2I', 'CAMXZXXBD7DFBLYLHUW24U4MY37X7SU5XXT5ZVVUBXRXWLAIM7INI7G2', 'CAMPG46IY3FCD3QEXOFAX4ZGF435HM42L3EOR32PZGNQUZL4OJBGPQCL', 'CDTBY6MZUQADODPZWRF2TO5RSWOJHZGYJFF4IKSXZUPTGBCQIGI5IVUR', 'CAAO3AET65WOCC447CWCLAXGL7GHUMOWPT7R6AQB3HHHMDSMBES7XPYX', 'CBQXETIPKAZ7E3DSYVTPQBQ3VEAYL3OKFONKVYG3B65ATG35HFGHOZUN', 'CCRXHM2CC5TL6O6M6BDBRJXKS7P4WCU45T6O2AQ6LRTSZ5WSCQWJH7M2', 'CATBKAYNYV6NWGBMUWL2Q47HWLZGLAINAJCE36G55C4F272O5S5GLV7X', 'CCGV4T4AJ7BHBHEHVZVIECDW6CO2UQRNMGKLV4SFKFQ6Q2EP7E6OXRER', 'CBSJUAXXREFNOENLYRURJILAVLFQVCNU6KO4DHPLJQRFIUJZ5FWZ7HS7', 'CDW2RFU4WFZMVR5XRDE2TRJF7ZCRJG6A6TZQCWTRB473XJSD6G4BK4EK', 'CAIXIOWEREZF2RN25FDIBUSDB3HTKL4DTIXKDKYWW43RYRRHWJ54DKRR', 'CD26X7VAM7GGAHYBIZ2DPSNS7TETJPWQEKN5JAWUEBSYMDOUBWRZSJNZ', 'CA3XYBIUSAX22POJFDFIGTYLNZUGFER6U6Z3PDJ5BO2Z2A2HZEG2X2XU', 'CACK3FAHXCB7QAJAXBPZ5SE4CN5KCW33AS5UUTRM2TGO2V4O4X4FZ4E6', 'CCXQACY5KY7JWVK46ZNWPZSFRYOIRJKYRVEWPOF5QTSLJHLJ5B63EV3J', 'CCS6CMLXD7NBD5L54FGDENKBBSAR3TQSTNZAQVT5JOVV6S7JH3EGXDCG', 'CDVFMC5KCANFIG2KTNJMFYEAXX22TXU32QCINAAFAXMHDGB3Z2AYNCIE', 'CBEE5LVXTORYRWW36FIWHOQLJ2E4ZH4IWXYZ7S7LNWU6QPMLDXWM4FDP', 'CDZYAFNTTKR5V6ZWYUBHSYTYNEMOQZJPJ4VRTWFEMEZO3CPLS62HWRY4', 'CCC53HEWFLYA4KBYAFHUEJREIZP4SXFJKMB353WFLKOKENNMEVNGUNEZ', 'CCOOTK5GR3ZTISUEYXU5WANZB335SPOABC5CWIB46YM4FVTFKHKMK7EI', 'CCZOFUG2QO46RIVGOSCCY7MMDWGT2NQELJICSHLSNWKSZLQI7B2DPMTB', 'CCOA2AX7JPWRSE5LMJVRXSWLAT3ZFZC6HM2TQ5ZC476K44KYKHNKNEJE', 'CBT37VUKG4MNN5OG62VEWJHPZK3UM2KMFOKGNMASQUDTX6367KFM2YOI', 'CCFDZQB5SDHZMEKNSEMTU7G6NY25TRXMUYYLLJ7WYU75YVIC4237VD75', 'CAJQTUYNDTG5RKOEF4LKX3ZXRNBSZOQEGUYLWLJXXRP7KL6FN5BGUKDH', 'CC6HJVNKAZPLC55W6CYFMQJGDYRDAWEZV23IWTULCBWNSTKY7KK47BSQ', 'CC3GYD7YAQHE5JDEQ2AGRZDRGZ4G3STGGQCUVZYHL5ZJUKHYHYVBEMWY', 'CARZ47CFSYB3DL2OQQAR4KMCS2UNWN23DKXPUGOA6AVPX62M466ZTYSX', 'CA3TOMCU534RM7KBWTUJCLUALIQDNLZ6OFOCCQOPE4LNCURBIXKBPQQ2', 'CCL7U7D3CLBFMNNJZB3ZZ4P7FCKETBXM3NTIR73SVIWLUVBKZQNUPD2D', 'CBP6AYV4ZGRSAF6DEWSFIRZRJEQMXO6IWB2MXODWO6XS5UKFMACKGL2M', 'CCDPYFKYHWNXCO2RH6PCZF7JU27MNMNS4ETUHERW5VQOMKVL6QXZFSN3', 'CCXCWYGV6U3FGTTMUH5J6OWWBOK2V3WSQDLBFUWMOCRXXJZS4WUJQSMM', 'CC2BIHZZZ5T3MXDTSN4BM6USTL32GCPS3REN2U4XS4ZAQGMJC325EHX2', 'CBDJFETM563453SR2KAW7DUENNRWCJOOGBFQKWEDRIBJXZ6ZHSSIVTZD', 'CBIUKNYPFT2XNOEM4Z4UY7HNXM3KYOOJ47SFZWD2PBXD3M24L3BFQS7T', 'CASIKIG4K4TXL767EKCKNDSWPWFRVDMYXAU25PEBKAY3JMGKKLQ26AT5', 'CATTJU74FVZ3KYRWJSDKODAX7GENKBODCWNPG4VR6MWUOFWWMS7R3L54', 'CDLCMKIM56QM4WP5JNOB7ZGFTF2OLZ6G3MKREWF6BJ7SBIWWYHYOVGHT', 'CBGRTO7NN6NJDH6JIHNCDUKJCLT5PFATGECDBMUW4U2IZTTIRCALQ5NG', 'CDBQ2IPAC26MQWZR3D2IA647IKGS6CMKQJFIVVOQBQYZ32JQXHNKWI57', 'CCSUZC2PKN5RQC4O6CFZQOIVKRGUTVXHV7MV7XHWR5VBNKC7SCS6JMOJ', 'CBMSBM6EABGBNZ47WZTLX6WJOB3ETO2GNPQYC2FX6LJXUL7TRQFZ3IA3', 'CD3QVDHNWWERLSR7RLFGSDORFMG4IGOVGG5EQD7RKPZO675CIRUYAZCM', 'CBPPA6CMGLINISOAT6PVL5RNC5AGUWKN6U7O6QFCNQVI47ZNQVLCTWDW', 'CB335M27XHH4S3XKFBH4IHBKQRB5AITZ76P3BULRTAVI2RRBJA3UBGRW', 'CCQ5ZALBEXY63GBJ5X2J46VT7JUXQZGA3P4RIFUIDRVUWT3QLNGVQGKG', 'CACX5646BHTJ3CMNDPDTQURAP5REOCUIICJWWQ26DVO3YYYG2UCKKWVY', 'CBR7Y5SNUIEBWN464BOA6RBVLQHZYEK7R5WYOP7G7M5EDPUVP27UEAJS', 'CBRGSLZ267SYS2QMQMEKX3I6X5NCFPE5H7O6MOHAJYRNOWNOB5QSNAFV', 'CCEBH67CQ5HCQIZMLD6T3OJF3HL5WVM2L74Y3T2LPNWSJRSTH3LVUIET', 'CDNPUXW3QRTKTYA3R2ETPYPX2D3WYJGY2SLOGXTGH7DV2NMVEXFPVIUJ', 'CCDV4DJ5NCQ7R6KNCFXWLFPZWY55AWL3GLSA6JEMMUDBHQZTZTF5XCUR', 'CBSGMHDTW5QO2FJMGGJSXMS72GPVSWKWXBIXJRPFWLXSCJ4PA46GGM5S', 'CDCBYI6IHUWQCYSH5NTFMEPGBTQZEK3KLGRT44GAOOMSRCRDDLFSESVR', 'CARFAMXG2B7ZGKLPO6NWLYXL5XTCMY4BIHE3BWUAZDSX2YQQEAGG6SCK', 'CD5T5DVALG45HGQSO3ZDVY25PB3QL37N6JUDOYCXK5CE3AWILW2V7HWO', 'CA4Z7AMKNYGTPSBU77GLXVARRT6DKGSYPGXY2YZWNGPQ7KQGLLSN7ZXJ', 'CC6LQAOLO5CJOQG6364QISO7CWJEPSW5B7XRQGQER2KY7WWMA6SMZDYW', 'CDTSSTLKVVPWJZXVCGJJNGWKH5MY7OMINVXTB7DGFMDJTCCDBCSRG52O', 'CCINLSVEOXXFDSRF2DISYDCRYXS7UPWEDR6ZUARHJFLFVWWRDOV3EHAY', 'CC5CUWNMRMUSRLNPQQM3J3SLHJ4IO6EEKKXA7ULSLQKHNXW5PGPK4N3I', 'CB4KKFCWV25BO3RQQHFJLSGAOBHBLCH3GLPBIOB35D7P3YP4CDHZPVH3', 'CCB67QNROV4EX7BFNB366HQCBE7Q4ND254HNAOWREEP3WQEL56ALUUBN', 'CDIFITC5BKGIIXDKNTDS7OFSGCZ7CJQA36JAPVN2LXJTYXCJWNDGS35O', 'CB6Y3QNAKAI27VAPFYHVKNTHSQWDAN23D6OIDIH2C5YBDPSOWVPDMNPU', 'CAVLQ2RJXM5SWA4FWRNJAKPT5B3YV3OXFOBEZC3TT6KW5SDE2NEZ6STE', 'CCKQO6BVE3SR34RTKAODYDCYLN7IJMKXN7D6ANGYRAOLSVVCGH4CMAOT', 'CAKJXFOVLECSNMDGEGOILWCZJZVDM2MKJFJBITKAABMGN57I3QQPS35M', 'CB7ELLI7AIJJWNIQA6OYHWXD7SMXUH4GVC5BNHHFSQLTCBGXXOG4ARVW', 'CDNC5M6TNUBGA72XN4GKT3AIIDEMXN7D4QZQ3PC7U444SIM5ZSPMEQL3', 'CBVCCH2E47NKTFOQFA2KKPPOMVQPMTP4FIWYJ5WFLW2G3XHE7AS2XX6S', 'CBIYPMQIQINY4FI4RXUZJ2HVNBRTE4GYQGEATKMERTJJVEMIB5QWAO6X', 'CCCVPSORZY5N7CU2IENGXDQ5EG4HAX7YLIAMZ4IU2RNVRQSJO5LDB62W', 'CDJPROL4CVOGTIJ4VBJST67D6SJDPUICASDQFBYD3DB74AR3SE3MAR4V', 'CA22XCXSINOJTOQGKTLTEUXNKE7Z4IEBO5XNHPX7MRAEPOD3OAJMHY5R', 'CAHAKWU2DHJL3GMQCDWAY35B5HEBQM2WILVK5C5BI2EBQSAWOCSDYAFH', 'CCAE4V4CUOGRMISNDQFZECSRZZ5WR4MIOXU3LS5TWGHXKU2XQ25AORDY', 'CCTDN7QPRBJEWIK36KRT23PJTTP54VB55TJ3ZICQ4GH6GLOOADMWPGPR', 'CBTR6DGWFTEH4PU45IY6HNRI3QKZQEMG6AWUN5WZ4KISPBOWGILFH6M2', 'CD5HRIJ7CR55VJZGXEI37DG4VYXQQ6YWYICZZHQIOUREVFQBVDVHMKGJ', 'CBVKW4FIXHMN2GVVEUNUS776GXSR767ADANKWMB5FK5HS5MCGYMOKAR4', 'CAHVZ7BDMO4QPQ7KWG4XDA4UJKSZYMRBUQCPV5C3GT7IRWE3DNXECQZX', 'CDTTGVKXMYPZOVZVWPVBQZJ34L4UBWMKWCT6VXAILOR2JH7JEJZIFNDW', 'CDBIYK7BL4OQJ6OAWIFI2WQX75GM5V4EHYTBNLS5I6JYLTGAR6ZHOSHD', 'CCMAKYCJGPWFYCVJXBXC5QLA5QPM3LSZOGG2O7QCQE5KAIPUEJIVVOA2', 'CAZ43KEJHOG4F5ARGNMS6UGMU5UCTHC6BNBEJ4UXN5ZR5M6BPQVTTJKK', 'CD6A62JGCAX3Y375VJFQCPI3LFA3Z3DM4A6NQRJVE5UGKOGVNR74QUML', 'CDVJBTSEA2AQSZKCI24NM27HX6OT57YNZDC4SQVQX7IT2AYWNWGSR4R5', 'CCBAK2F36ARUZ36WUGFI6NU5LQAYO67IN3I5QTB2V42DI42YYRIKWXEK', 'CCZCKFDGQ36M4SWE6AMNZPSNJ7G4DHCLB5LKN3ONM622AWUFXQTXVQH4', 'CAOG4YU55SMFTHP2XUZULHV37SLPKQGWY6BOJP5A7UEKL2VIM4T3Z62G', 'CDK4YEK25CA6T43K6NBKJCRZH2QEHTTTCDVI6QRMEBD5B5OJ66CUQ26J', 'CDCDQUQH2Y2CYUBPCM4ZE6SV4XSUKT3QZV7DGT3VIABCSBITVQIMVPSJ', 'CCAX4TWIUM4P3K7ITHW5BSLRXC6NOBXLHSWBDY3NE7F6QA2QMSLUG7GS', 'CAYZAMECTKHMNCK2CZYRJZIK4NG4W46FU5TKFBM5OZ5YTEQAWMUGTRHK', 'CAOSHLX34QI7ZGKHJJRQH7N5KRF7WTZNMKLYHS67FK7U76EJ4UGP2U4Y', 'CCRDMKXCM3F7I4SRA6PAICMFOY3MIR67U5QMZFW2EGHAXYYN2NI7USH4', 'CAFZJZZ7ITZHUGNHC5YSOS47LR66JS64G7TQW43JN4IMDG5KZC4VA3DW', 'CC6WOGTWGZERQVJRT45XST76QYGD3YICUWDNYW3K3AD5ONARQQW2N7XP', 'CCCDPF74BFBIHCBWCA3QX5R2UULH4VSJFOK6KL44KDKJS75ZKJJYUSPH', 'CBMOEJUOKI72AXRPEQCRYSWDUBMI2LZEYVFJUTB256FO3WYSYSZI5F5A', 'CBVDERGK2SMEO3PUYIU4RDJIQ4XYEY4OFBAXC7DWFU67JS2V3N2ESSCP', 'CDS3WIIQZJJHIUPL6BP5K4TP5WD74LU4CKHDIYIHWZHJJRAKPHV42GRE', 'CCV2X5THRWCT7HCGJU42DMOVYLAARVIPEDG2LQOVVA2WGONF2MZY2OX6', 'CA4HTZNY2RBZWEQE5GBMNREZMFRPAZSVJ6OGPC7T3VM7NHRJYFAVID2S', 'CBBMQBNHB2FYVZYV7VNHOJHUMTFJLR4PUMRVQYNW6RHIKZO2NQMIBUCV', 'CDTSE6RLRI7ZO25JSER6E4SQR4PHJJNONEGS5HDJ3Y6LAKECRZKYN5CA', 'CBRUQ7I6C6OGHMDYWD6XQUZFB6KJ3LLPNE34EPKSPFZ2YMBJ2GIWYYZ7', 'CDPL6QRE7T5XXICU2KJEUL366KEZT6ICOVBLSL46MHMC5RSDIBR2PCTO', 'CADMDTCQHSC2GCYPDCYQ7FBYVOXED3E3WGCYJHHT524ZBALM7VYHFS7F', 'CAAJYIESEIKI7KZV67MBSXPCRGKH5WY354WUS55H4UNBD35OSKYPZA7Q', 'CBWWCFZUIYARXP2VFQKB6TGD63IV6PC5GO4AO6PNP3HGZWHT23FTHMGC', 'CCZXH6N6DSJLAMXCYODGD255GTFILMNU4R5AHPE7PED4A4EZEOPYAWL5', 'CBV6LZABOAJRXHLIEKILTWBPC2AXLYVR4CGGPKZQ3PWJ5QFTPIWSWGWQ', 'CAPIOQNULTKVYOJT6X2W2XKGNIVUWZDY72Y42YG6HQKJ7DU7YTHIDQYX', 'CDYLKM3DGH5A6QA6QOIITPKG7C4DTZMS2HF75XURORACBHCR6AOE3K33', 'CC7IGNJ4CDAKZPOZJCTTWGAVKTQXKYQGUSVJ5CDUPES3QULCQW6UNAH5', 'CCX7MKVYN5LZENM53VJOQT7ZE477RAIE3FIKEP76OHEWGNKC5TSCXUL2', 'CCPN4NNSQKL3LLPTSPTFKYKXR3FBL37AULE6PTZH3QD24MPHXQCN5O3U', 'CAT65JSA4B3AK7SIUWB5ZONZALAS2HGMFG7EF5GP7BIOKJP6Y4O6J5BF', 'CB665SVTHHKPYX4LUSTYUG5T22WMDETNWWKXRDES3I74NADZG6SIBP5F', 'CCVWACSSUYADCHYEYUCKUQL4YISMLLFFXY56UHCVIYR6D6P77RCRGQY7', 'CDE53ZA37BXC3RA4J4CX2ZRCJ3B4DKXK7VCVK3OMDBBIIBZASTVQQM5L', 'CCC466Y3A5332PRE7NQOKOLJXDHF5CNS2M5MT7I7YIPNKLUO4YETIE3B', 'CAXYSVTPAU6JLPI7V6XJWLFWIYMFIHHFF7D7QCFH2YB2Z4BSI3BCGGH4', 'CB2I6JGVCWBGXQ4WAJOQQEAKEXXPURL4E2BPEW4NKVTUYYK7VPTDDTMN', 'CD3XIX65YUNZTEWOBPFWTTJE6TXDXLXE5THMW3HYBZXCQU4TWK2DUKWL', 'CDM3E67MHCLMFXRDJWOIZRRYPKENH7CMARTOQBEZQQZVLQV52RVPMINA', 'CAWR3CM74VNXM5MRIPILDSTW5S4ZNB47DYBEVE6565UC573L7OFZF7FH', 'CCYMZTOJIDZY45XGDBUNRMYUZWBUTNWOAMREAW4JYU7GEKDHLOEOJX25', 'CDBIGH3UEIVPVU7I2PGJV3IFIAN6OIPZ3QW7EDOO6LAHYBWW4MVS75Z2', 'CBMWU3574VFWNBNMNYAAH4OBT7DPB27URDW4BWIV7XAPQG6YYMJW2LSH', 'CCKQASCNLYGCUYRKDFYHW5SRVUQNRPRX27YAK62CBNLEVSKIXE3CO4LI', 'CDQ4OYM3RPLEWNZFVAJQGEYLSDMPHEZYMHVOQBKI767UWV5XV5ISAJE2', 'CDINXPGR3BJCPBC7IQQIL5AEHAVDZZSIGNCWJ7ORPVBRCL6L5RJ3FDQM', 'CC642QYWXXR2HUZDNJ6KYN5LV5JFPFPT4Q6YNKLZLYEFWZZZ5SJYLA5G', 'CDRRS2SLIP7THFGUZVB4QL2RAM2ZHSDMAD2GL5GEXTKK5AY3DQUX3Y7N', 'CA5H37TMUGNSUS4KP7UV5EB4UMEPZV6MILEEKROP3K47SLA5SV45FCIP', 'CA4HVQTVHQWDIZSQQQBXYHCA4C5D6V2ZGRHJQIKHVDMBEXCMFH4NYURR', 'CDL5H2BZTIPBPIKJ2NOILZQYZRZE553H3SZX47DDBYEBXSWXIHZLGA2C', 'CCJHUCHZ2DC6MP7LMGQJYSENNTGIFWU4J4TCGFYYDLAC5LTD4YMF6HSQ', 'CD74JDJIRBMCKPI5LV5C4A7L4NIPCLJ3VOVYILFFXF3TSTALPOLY7CHC', 'CB3ZWHICKIYJOSQ7W2GFN2U2CVSGTFBQ6GCDVGQ354BQYJCKX6L22CNH', 'CDQUZBIS7TFV64ZTX22RQV224QPBJZ2BNJB5J67A3KMFY3ONFHVNNS3D', 'CDQ223FWK2XEEYXNNJQS4JCQ5DUCPXKJNNDNRJ3RON5LXH43UO7ECWUY', 'CAJAQRYP5NQKLK6DJNTI4AVH3MXL3GYU7LYKT7JWMMRD7PFNF64RV6BM', 'CDFHPTKLKA7GBLGVWXVUUVGFMXZJCP2ABQXINCC6WTO2KNDFDY4WXQRU', 'CALCNPWBGQOPFTY3BSAZKAGI3MXEHZZ7VOMSMTX3ISYWBTFNGGFQVK5O')\n    AND he.type_string = 'ContractEventTypeContract'\n    AND he.successful = TRUE AND he.in_successful_contract_call = TRUE\n    AND json_extract_scalar(he.topics_decoded, '$[0].symbol') IN ('swap', 'deposit', 'withdraw', 'claim',\n        'trade', 'deposit_liquidity', 'withdraw_liquidity', 'claim_reward', 'position_update')\n), tagged AS (\n  SELECT e.*, json_extract_scalar(e.topics_decoded, '$[0].symbol') AS action,\n         e.contract_id IN ('CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK', 'CA7RQDMMV6E53P5EDZA5GPWBZ33AMW2ZNO42XLI2RGRIAP4QXIARUOJQ', 'CB4YHF4ESRJ4XZRXISLXSUZTYY6YPBPZ73MZWSTUWY46DKYW7IGLHGF7') AS is_router\n  FROM ev e\n), routed AS (\n  SELECT DISTINCT tx_hash FROM tagged WHERE is_router\n), lp_direct AS (\n  SELECT DISTINCT tx_hash, closed_at FROM tagged\n  WHERE NOT is_router AND action IN ('deposit_liquidity', 'withdraw_liquidity')\n    AND tx_hash NOT IN (SELECT tx_hash FROM routed)\n), tx AS (\n  SELECT t.id, lower(to_hex(t.transaction_hash)) AS tx_hash\n  FROM stellar.history_transactions t\n  WHERE t.closed_at_date >= DATE '2026-09-17' AND t.closed_at_date < CURRENT_DATE AND t.successful = TRUE\n    AND lower(to_hex(t.transaction_hash)) IN (SELECT tx_hash FROM lp_direct)\n), signer AS (\n  SELECT tx.tx_hash, MIN(o.source_account) AS source_account\n  FROM stellar.history_operations o JOIN tx ON tx.id = o.transaction_id\n  WHERE o.closed_at_date >= DATE '2026-09-17' AND o.closed_at_date < CURRENT_DATE AND o.type_string = 'invoke_host_function'\n  GROUP BY 1\n)\nSELECT 'aquarius' AS protocol, closed_at, user_address, role FROM (\n  SELECT closed_at, json_extract_scalar(topics_decoded, '$[2].address') AS user_address,\n         CASE action WHEN 'swap' THEN 'swapper' WHEN 'claim' THEN 'claimer' ELSE 'lp' END AS role\n  FROM tagged WHERE is_router AND action IN ('swap', 'deposit', 'withdraw', 'claim')\n  UNION ALL\n  -- Direct pool trades: topics[3] is the caller (the router itself when routed, so excluded).\n  SELECT closed_at, json_extract_scalar(topics_decoded, '$[3].address'), 'swapper'\n  FROM tagged WHERE NOT is_router AND action = 'trade'\n    AND json_extract_scalar(topics_decoded, '$[3].address') NOT IN ('CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK', 'CA7RQDMMV6E53P5EDZA5GPWBZ33AMW2ZNO42XLI2RGRIAP4QXIARUOJQ', 'CB4YHF4ESRJ4XZRXISLXSUZTYY6YPBPZ73MZWSTUWY46DKYW7IGLHGF7')\n  UNION ALL\n  SELECT closed_at, json_extract_scalar(topics_decoded, '$[2].address'), 'claimer'\n  FROM tagged WHERE NOT is_router AND action = 'claim_reward'\n  UNION ALL\n  SELECT closed_at, json_extract_scalar(topics_decoded, '$[1].address'), 'lp'\n  FROM tagged WHERE NOT is_router AND action = 'position_update'\n  UNION ALL\n  SELECT d.closed_at, s.source_account, 'lp' FROM lp_direct d JOIN signer s ON s.tx_hash = d.tx_hash\n)\n), users AS (\n  SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date,\n         user_address, role, MAX(closed_at) AS last_activity_at\n  FROM source\n  WHERE regexp_like(user_address, '^[GC][A-Z2-7]{55}$') AND role IS NOT NULL\n  GROUP BY 1, 2, 3, 4\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at,\n       'activity' AS row_kind, DATE '2026-09-17' AS covered_from, CURRENT_DATE AS covered_until,\n       CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer\nFROM users\nUNION ALL\nSELECT 'aquarius', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-09-17', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'\n",
       "matview": "dune.paltalabs.result_scf_aquarius_users_live",
       "cron": "0 5 * * *",
       "file": "queries/pilot/8796497_aquarius_users_live.sql",
-      "pending_execution": "01M32CXJCS3EAK2JRKCYHPG2JG",
-      "last_execution": "01M32CXJCS3EAK2JRKCYHPG2JG",
-      "credits": 25.228,
-      "rows": 8368
+      "pending_execution": "01M32KNSV51K0W45ASBSFJ2AZR",
+      "last_execution": "01M32KNSV51K0W45ASBSFJ2AZR",
+      "credits": 7.885,
+      "rows": 986
     },
     "soroswap_users_live": {
       "query_id": 8796508,
-      "sql": "-- Generated from scripts/pilot_sql.py; T1 address activity only.\n-- Daily UTC buckets. Metadata survives an empty protocol and is never a user.\nWITH source AS (\nWITH pairs AS (\n  SELECT DISTINCT json_extract_scalar(val_decoded, '$.address') AS contract_id, 'pair' AS kind\n  FROM stellar.contract_data\n  WHERE contract_id = 'CA4HEQTL2WPEUYKYKCDOHCDNIV4QHNJ7EL4J4NQ6VADP7SYHVRYZ7AW2'   -- factory\n    AND closed_at_date >= DATE '2024-02-01'\n    AND contract_key_type = 'ScValTypeScvVec'\n    AND json_extract_scalar(key_decoded, '$.vec[0].symbol') = 'PairAddressesNIndexed'\n    AND json_extract_scalar(val_decoded, '$.address') IS NOT NULL\n),\ncontracts AS (\n  SELECT contract_id, kind FROM pairs\n  UNION ALL\n  SELECT contract_id, kind FROM (VALUES\n    ('CAG5LRYQ5JVEUI5TEID72EYOVX44TTUJT5BQR2J6J77FH65PCCFAJDDH', 'router'),\n    ('CCHCH6XVKTMKTYCTKKTKNE2TFP5CMORNY77TA6XSRAD2XM7I2SJBUH3H', 'aggregator'),\n    ('CC2CMNKAFI3KKL6ROMIYJKKX2WE2MV5QAF7DZDWC57ENHV6DQTHT3W64', 'aggregator'),\n    ('CBFAORZNK4JSCJYT3ZLWFQ5QEI4IHOIYY6XCYT3E47AK6ZMZFKFP6ZKA', 'aggregator'),\n    ('CACITNMTUSTZYKKH4TJVXNH4C4XHGYFVAPQ2EE3D5LTL3HIA32QY4Q6X', 'aggregator'),\n    ('CDPJAUHPMJBOPUHBWBHO7NKSTR6J5EXZZ2OX4QGSXIHEJLBDY2JABM3L', 'aggregator'),\n    ('CCXNPJPNWT4WDWKTUNRPKNUHFYKZW6XBJAOHKAW2KLY5PBBGX6ZCFUJC', 'aggregator'),\n    ('CAWTTRKV7N4MBFSFU7BBZVMOAFEVYMZEDUS4ULBGUQH5YMFKPOFUWPF3', 'aggregator'),\n    ('CCWLXIBMONXFCXELPFHXPT4VSXKUSSP67DXNXWQ4YIPFGNBHQWEX4W4P', 'aggregator'),\n    ('CDEM2W2D2SC7VU3NOCIKHZWCUNCAUWI5GUGHSWBJNBENRHSVIMUT6EM2', 'aggregator'),\n    ('CAYP3UWLJM7ZPTUKL6R6BFGTRWLZ46LRKOXTERI2K6BIJAWGYY62TXTO', 'aggregator')\n  ) AS v(contract_id, kind)\n),\nev AS (\n  SELECT DISTINCT\n    c.kind, he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash,\n    json_extract_scalar(he.topics_decoded, '$[0].string') AS emitter,\n    json_extract_scalar(he.topics_decoded, '$[1].symbol') AS action,\n    he.data_decoded\n  FROM stellar.history_contract_events he\n  JOIN contracts c ON c.contract_id = he.contract_id\n  WHERE he.closed_at_date >= DATE '2026-06-01' AND he.closed_at_date < CURRENT_DATE\n    AND he.type_string = 'ContractEventTypeContract'\n    AND he.successful = TRUE\n    AND he.in_successful_contract_call = TRUE\n    AND he.topics_decoded LIKE '[{\"string\":\"Soroswap%'\n),\nactors AS (\n  SELECT kind, contract_id, closed_at, tx_hash, action,\n         json_extract_scalar(elem, '$.val.address') AS user_address\n  FROM ev CROSS JOIN UNNEST(CAST(json_extract(data_decoded, '$.map') AS ARRAY(JSON))) AS t(elem)\n  WHERE json_extract_scalar(elem, '$.key.symbol') = 'to'\n), routed AS (\n  SELECT DISTINCT tx_hash FROM actors WHERE kind IN ('router', 'aggregator')\n)\nSELECT 'soroswap' AS protocol, closed_at, user_address,\n       CASE WHEN kind = 'aggregator' THEN 'aggregator_user'\n            WHEN action = 'swap' THEN 'swapper' ELSE 'lp' END AS role\nFROM actors a\nWHERE (kind = 'router' AND action IN ('swap', 'add', 'remove'))\n   OR (kind = 'aggregator' AND action = 'swap')\n   OR (kind = 'pair' AND action IN ('swap', 'deposit', 'withdraw')\n       AND NOT EXISTS (SELECT 1 FROM routed r WHERE r.tx_hash = a.tx_hash))\n\n), users AS (\n  SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date,\n         user_address, role, MAX(closed_at) AS last_activity_at\n  FROM source\n  WHERE regexp_like(user_address, '^[GC][A-Z2-7]{55}$') AND role IS NOT NULL\n  GROUP BY 1, 2, 3, 4\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at,\n       'activity' AS row_kind, DATE '2026-06-01' AS covered_from, CURRENT_DATE AS covered_until,\n       CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer\nFROM users\nUNION ALL\nSELECT 'soroswap', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-06-01', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'\n",
+      "sql": "-- Generated from scripts/pilot_sql.py; T1 address activity only.\n-- Daily UTC buckets. Metadata survives an empty protocol and is never a user.\nWITH source AS (\nWITH pairs AS (\n  SELECT DISTINCT json_extract_scalar(val_decoded, '$.address') AS contract_id, 'pair' AS kind\n  FROM stellar.contract_data\n  WHERE contract_id = 'CA4HEQTL2WPEUYKYKCDOHCDNIV4QHNJ7EL4J4NQ6VADP7SYHVRYZ7AW2'   -- factory\n    AND closed_at_date >= DATE '2024-02-01'\n    AND contract_key_type = 'ScValTypeScvVec'\n    AND json_extract_scalar(key_decoded, '$.vec[0].symbol') = 'PairAddressesNIndexed'\n    AND json_extract_scalar(val_decoded, '$.address') IS NOT NULL\n),\ncontracts AS (\n  SELECT contract_id, kind FROM pairs\n  UNION ALL\n  SELECT contract_id, kind FROM (VALUES\n    ('CAG5LRYQ5JVEUI5TEID72EYOVX44TTUJT5BQR2J6J77FH65PCCFAJDDH', 'router'),\n    ('CCHCH6XVKTMKTYCTKKTKNE2TFP5CMORNY77TA6XSRAD2XM7I2SJBUH3H', 'aggregator'),\n    ('CC2CMNKAFI3KKL6ROMIYJKKX2WE2MV5QAF7DZDWC57ENHV6DQTHT3W64', 'aggregator'),\n    ('CBFAORZNK4JSCJYT3ZLWFQ5QEI4IHOIYY6XCYT3E47AK6ZMZFKFP6ZKA', 'aggregator'),\n    ('CACITNMTUSTZYKKH4TJVXNH4C4XHGYFVAPQ2EE3D5LTL3HIA32QY4Q6X', 'aggregator'),\n    ('CDPJAUHPMJBOPUHBWBHO7NKSTR6J5EXZZ2OX4QGSXIHEJLBDY2JABM3L', 'aggregator'),\n    ('CCXNPJPNWT4WDWKTUNRPKNUHFYKZW6XBJAOHKAW2KLY5PBBGX6ZCFUJC', 'aggregator'),\n    ('CAWTTRKV7N4MBFSFU7BBZVMOAFEVYMZEDUS4ULBGUQH5YMFKPOFUWPF3', 'aggregator'),\n    ('CCWLXIBMONXFCXELPFHXPT4VSXKUSSP67DXNXWQ4YIPFGNBHQWEX4W4P', 'aggregator'),\n    ('CDEM2W2D2SC7VU3NOCIKHZWCUNCAUWI5GUGHSWBJNBENRHSVIMUT6EM2', 'aggregator'),\n    ('CAYP3UWLJM7ZPTUKL6R6BFGTRWLZ46LRKOXTERI2K6BIJAWGYY62TXTO', 'aggregator')\n  ) AS v(contract_id, kind)\n),\nev AS (\n  SELECT DISTINCT\n    c.kind, he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash,\n    json_extract_scalar(he.topics_decoded, '$[0].string') AS emitter,\n    json_extract_scalar(he.topics_decoded, '$[1].symbol') AS action,\n    he.data_decoded\n  FROM stellar.history_contract_events he\n  JOIN contracts c ON c.contract_id = he.contract_id\n  WHERE he.closed_at_date >= DATE '2026-09-17' AND he.closed_at_date < CURRENT_DATE\n    AND he.type_string = 'ContractEventTypeContract'\n    AND he.successful = TRUE\n    AND he.in_successful_contract_call = TRUE\n    AND he.topics_decoded LIKE '[{\"string\":\"Soroswap%'\n),\nactors AS (\n  SELECT kind, contract_id, closed_at, tx_hash, action,\n         json_extract_scalar(elem, '$.val.address') AS user_address\n  FROM ev CROSS JOIN UNNEST(CAST(json_extract(data_decoded, '$.map') AS ARRAY(JSON))) AS t(elem)\n  WHERE json_extract_scalar(elem, '$.key.symbol') = 'to'\n), routed AS (\n  SELECT DISTINCT tx_hash FROM actors WHERE kind IN ('router', 'aggregator')\n)\nSELECT 'soroswap' AS protocol, closed_at, user_address,\n       CASE WHEN kind = 'aggregator' THEN 'aggregator_user'\n            WHEN action = 'swap' THEN 'swapper' ELSE 'lp' END AS role\nFROM actors a\nWHERE (kind = 'router' AND action IN ('swap', 'add', 'remove'))\n   OR (kind = 'aggregator' AND action = 'swap')\n   OR (kind = 'pair' AND action IN ('swap', 'deposit', 'withdraw')\n       AND NOT EXISTS (SELECT 1 FROM routed r WHERE r.tx_hash = a.tx_hash))\n\n), users AS (\n  SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date,\n         user_address, role, MAX(closed_at) AS last_activity_at\n  FROM source\n  WHERE regexp_like(user_address, '^[GC][A-Z2-7]{55}$') AND role IS NOT NULL\n  GROUP BY 1, 2, 3, 4\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at,\n       'activity' AS row_kind, DATE '2026-09-17' AS covered_from, CURRENT_DATE AS covered_until,\n       CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer\nFROM users\nUNION ALL\nSELECT 'soroswap', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-09-17', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'\n",
       "matview": "dune.paltalabs.result_scf_soroswap_users_live",
       "cron": "0 5 * * *",
       "file": "queries/pilot/8796508_soroswap_users_live.sql",
-      "pending_execution": "01M32CZSDAYPQGG1NX0QCD95M9",
-      "last_execution": "01M32CZSDAYPQGG1NX0QCD95M9",
-      "credits": 15.748,
-      "rows": 10030
+      "pending_execution": "01M32KM1ECB3MEYARZ7JMTR0C7",
+      "last_execution": "01M32KM1ECB3MEYARZ7JMTR0C7",
+      "credits": 2.139,
+      "rows": 139
     },
     "phoenix_users_live": {
       "query_id": 8796519,
-      "sql": "-- Generated from scripts/pilot_sql.py; T1 address activity only.\n-- Daily UTC buckets. Metadata survives an empty protocol and is never a user.\nWITH source AS (\nWITH pools AS (\n  SELECT pool, MAX(token_a) AS token_a, MAX(token_b) AS token_b\n  FROM (\n    SELECT json_extract_scalar(val_decoded, '$.address') AS pool,\n           regexp_extract(key_decoded, '\"token_a\"\\},\"val\":\\{\"address\":\"(C[A-Z2-7]{55})\"', 1) AS token_a,\n           regexp_extract(key_decoded, '\"token_b\"\\},\"val\":\\{\"address\":\"(C[A-Z2-7]{55})\"', 1) AS token_b\n    FROM stellar.contract_data\n    WHERE contract_id = 'CB4SVAWJA6TSRNOJZ7W2AWFW46D5VR4ZMFZKDIKXEINZCZEGZCJZCKMI'   -- factory\n      AND closed_at_date >= DATE '2024-02-01'\n      AND contract_key_type = 'ScValTypeScvMap'\n      AND json_extract_scalar(val_decoded, '$.address') IS NOT NULL\n  )\n  GROUP BY pool\n),\nev AS (\n  SELECT DISTINCT\n    he.contract_id AS pool, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash,\n    COALESCE(json_extract_scalar(he.topics_decoded, '$[0].string'), json_extract_scalar(he.topics_decoded, '$[0].symbol')) AS action,\n    json_extract_scalar(he.topics_decoded, '$[1].string') AS field,\n    he.data_decoded\n  FROM stellar.history_contract_events he\n  WHERE he.contract_id IN (SELECT pool FROM pools)\n    AND he.closed_at_date >= DATE '2026-06-01' AND he.closed_at_date < CURRENT_DATE\n    AND he.type_string = 'ContractEventTypeContract'\n    AND he.successful = TRUE\n    AND he.in_successful_contract_call = TRUE\n    AND (he.topics_decoded LIKE '[{\"string\":\"swap\"}%' OR he.topics_decoded LIKE '[{\"string\":\"provide_liquidity\"}%' OR he.topics_decoded LIKE '[{\"string\":\"withdraw_liquidity\"}%'\n         OR he.topics_decoded LIKE '[{\"symbol\":\"swap\"}%' OR he.topics_decoded LIKE '[{\"symbol\":\"provide_liquidity\"}%' OR he.topics_decoded LIKE '[{\"symbol\":\"withdraw_liquidity\"}%')\n),\nactors AS (\n  SELECT closed_at, action, json_extract_scalar(data_decoded, '$.address') AS user_address\n  FROM ev WHERE replace(replace(field, ' ', '_'), '-', '_') = 'sender'\n  UNION ALL\n  SELECT closed_at, action, json_extract_scalar(elem, '$.val.address')\n  FROM ev CROSS JOIN UNNEST(CAST(json_extract(data_decoded, '$.map') AS ARRAY(JSON))) AS t(elem)\n  WHERE field IS NULL AND json_extract_scalar(elem, '$.key.symbol') = 'sender'\n)\nSELECT 'phoenix' AS protocol, closed_at, user_address,\n       CASE WHEN action = 'swap' THEN 'swapper' ELSE 'lp' END AS role\nFROM actors\n\n), users AS (\n  SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date,\n         user_address, role, MAX(closed_at) AS last_activity_at\n  FROM source\n  WHERE regexp_like(user_address, '^[GC][A-Z2-7]{55}$') AND role IS NOT NULL\n  GROUP BY 1, 2, 3, 4\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at,\n       'activity' AS row_kind, DATE '2026-06-01' AS covered_from, CURRENT_DATE AS covered_until,\n       CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer\nFROM users\nUNION ALL\nSELECT 'phoenix', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-06-01', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'\n",
+      "sql": "-- Generated from scripts/pilot_sql.py; T1 address activity only.\n-- Daily UTC buckets. Metadata survives an empty protocol and is never a user.\nWITH source AS (\nWITH pools AS (\n  SELECT pool, MAX(token_a) AS token_a, MAX(token_b) AS token_b\n  FROM (\n    SELECT json_extract_scalar(val_decoded, '$.address') AS pool,\n           regexp_extract(key_decoded, '\"token_a\"\\},\"val\":\\{\"address\":\"(C[A-Z2-7]{55})\"', 1) AS token_a,\n           regexp_extract(key_decoded, '\"token_b\"\\},\"val\":\\{\"address\":\"(C[A-Z2-7]{55})\"', 1) AS token_b\n    FROM stellar.contract_data\n    WHERE contract_id = 'CB4SVAWJA6TSRNOJZ7W2AWFW46D5VR4ZMFZKDIKXEINZCZEGZCJZCKMI'   -- factory\n      AND closed_at_date >= DATE '2024-02-01'\n      AND contract_key_type = 'ScValTypeScvMap'\n      AND json_extract_scalar(val_decoded, '$.address') IS NOT NULL\n  )\n  GROUP BY pool\n),\nev AS (\n  SELECT DISTINCT\n    he.contract_id AS pool, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash,\n    COALESCE(json_extract_scalar(he.topics_decoded, '$[0].string'), json_extract_scalar(he.topics_decoded, '$[0].symbol')) AS action,\n    json_extract_scalar(he.topics_decoded, '$[1].string') AS field,\n    he.data_decoded\n  FROM stellar.history_contract_events he\n  WHERE he.contract_id IN (SELECT pool FROM pools)\n    AND he.closed_at_date >= DATE '2026-09-17' AND he.closed_at_date < CURRENT_DATE\n    AND he.type_string = 'ContractEventTypeContract'\n    AND he.successful = TRUE\n    AND he.in_successful_contract_call = TRUE\n    AND (he.topics_decoded LIKE '[{\"string\":\"swap\"}%' OR he.topics_decoded LIKE '[{\"string\":\"provide_liquidity\"}%' OR he.topics_decoded LIKE '[{\"string\":\"withdraw_liquidity\"}%'\n         OR he.topics_decoded LIKE '[{\"symbol\":\"swap\"}%' OR he.topics_decoded LIKE '[{\"symbol\":\"provide_liquidity\"}%' OR he.topics_decoded LIKE '[{\"symbol\":\"withdraw_liquidity\"}%')\n),\nactors AS (\n  SELECT closed_at, action, json_extract_scalar(data_decoded, '$.address') AS user_address\n  FROM ev WHERE replace(replace(field, ' ', '_'), '-', '_') = 'sender'\n  UNION ALL\n  SELECT closed_at, action, json_extract_scalar(elem, '$.val.address')\n  FROM ev CROSS JOIN UNNEST(CAST(json_extract(data_decoded, '$.map') AS ARRAY(JSON))) AS t(elem)\n  WHERE field IS NULL AND json_extract_scalar(elem, '$.key.symbol') = 'sender'\n)\nSELECT 'phoenix' AS protocol, closed_at, user_address,\n       CASE WHEN action = 'swap' THEN 'swapper' ELSE 'lp' END AS role\nFROM actors\n\n), users AS (\n  SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date,\n         user_address, role, MAX(closed_at) AS last_activity_at\n  FROM source\n  WHERE regexp_like(user_address, '^[GC][A-Z2-7]{55}$') AND role IS NOT NULL\n  GROUP BY 1, 2, 3, 4\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at,\n       'activity' AS row_kind, DATE '2026-09-17' AS covered_from, CURRENT_DATE AS covered_until,\n       CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer\nFROM users\nUNION ALL\nSELECT 'phoenix', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-09-17', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'\n",
       "matview": "dune.paltalabs.result_scf_phoenix_users_live",
       "cron": "0 5 * * *",
       "file": "queries/pilot/8796519_phoenix_users_live.sql",
-      "pending_execution": "01M32D0V4D3XHCVR1JR5Q5ZN9X",
-      "last_execution": "01M32D0V4D3XHCVR1JR5Q5ZN9X",
-      "credits": 45.473,
-      "rows": 1244
+      "pending_execution": "01M32KMSXZZBX9EN2PTPFQQFEJ",
+      "last_execution": "01M32KMSXZZBX9EN2PTPFQQFEJ",
+      "credits": 3.946,
+      "rows": 19
     },
     "users": {
       "query_id": 8796528,
-      "sql": "-- Archive/live boundary follows the persisted live snapshot, not the clock.\nSELECT * FROM dune.paltalabs.result_scf_blend_users_live\nUNION ALL\nSELECT * FROM dune.paltalabs.result_scf_aquarius_users_live\nUNION ALL\nSELECT * FROM dune.paltalabs.result_scf_soroswap_users_live\nUNION ALL\nSELECT * FROM dune.paltalabs.result_scf_phoenix_users_live\nUNION ALL\nSELECT * FROM dune.paltalabs.result_scf_fxdao_users_live\nUNION ALL\nSELECT * FROM dune.paltalabs.result_scf_etherfuse_users_live\nUNION ALL\nSELECT a.* FROM dune.paltalabs.result_scf_etherfuse_users_archive a\nWHERE a.row_kind = 'metadata' OR a.activity_date < (\n  SELECT MAX(covered_from) FROM dune.paltalabs.result_scf_etherfuse_users_live WHERE row_kind = 'metadata'\n)",
+      "sql": "-- History/live boundary follows the persisted live snapshot, not the clock.\nSELECT protocol, activity_date, user_address, role, last_activity_at, row_kind, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_blend_users_live\nUNION ALL\nSELECT protocol, activity_date, user_address, role, last_activity_at, row_kind, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_blend_users_history\nWHERE row_kind = 'metadata' OR activity_date < (SELECT MAX(covered_from) FROM dune.paltalabs.result_scf_blend_users_live WHERE row_kind = 'metadata')\nUNION ALL\nSELECT protocol, activity_date, user_address, role, last_activity_at, row_kind, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_aquarius_users_live\nUNION ALL\nSELECT protocol, activity_date, user_address, role, last_activity_at, row_kind, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_aquarius_users_history\nWHERE row_kind = 'metadata' OR activity_date < (SELECT MAX(covered_from) FROM dune.paltalabs.result_scf_aquarius_users_live WHERE row_kind = 'metadata')\nUNION ALL\nSELECT protocol, activity_date, user_address, role, last_activity_at, row_kind, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_soroswap_users_live\nUNION ALL\nSELECT protocol, activity_date, user_address, role, last_activity_at, row_kind, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_soroswap_users_history\nWHERE row_kind = 'metadata' OR activity_date < (SELECT MAX(covered_from) FROM dune.paltalabs.result_scf_soroswap_users_live WHERE row_kind = 'metadata')\nUNION ALL\nSELECT protocol, activity_date, user_address, role, last_activity_at, row_kind, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_phoenix_users_live\nUNION ALL\nSELECT protocol, activity_date, user_address, role, last_activity_at, row_kind, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_phoenix_users_history\nWHERE row_kind = 'metadata' OR activity_date < (SELECT MAX(covered_from) FROM dune.paltalabs.result_scf_phoenix_users_live WHERE row_kind = 'metadata')\nUNION ALL\nSELECT protocol, activity_date, user_address, role, last_activity_at, row_kind, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_fxdao_users_live\nUNION ALL\nSELECT protocol, activity_date, user_address, role, last_activity_at, row_kind, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_fxdao_users_history\nWHERE row_kind = 'metadata' OR activity_date < (SELECT MAX(covered_from) FROM dune.paltalabs.result_scf_fxdao_users_live WHERE row_kind = 'metadata')\nUNION ALL\nSELECT protocol, activity_date, user_address, role, last_activity_at, row_kind, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_etherfuse_users_live\nUNION ALL\nSELECT protocol, activity_date, user_address, role, last_activity_at, row_kind, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_etherfuse_users_history\nWHERE row_kind = 'metadata' OR activity_date < (SELECT MAX(covered_from) FROM dune.paltalabs.result_scf_etherfuse_users_live WHERE row_kind = 'metadata')",
       "matview": "dune.paltalabs.result_scf_users",
       "cron": "0 8 * * *",
       "file": "queries/pilot/8796528_users.sql",
-      "pending_execution": "01M32D28K5R7HT4KKZ9P1DYASW",
-      "last_execution": "01M32D28K5R7HT4KKZ9P1DYASW",
-      "credits": 1.206,
-      "rows": 119814
+      "pending_execution": "01M32KQD3JEQYZN25T4YBV0HXB",
+      "last_execution": "01M32KQD3JEQYZN25T4YBV0HXB",
+      "credits": 1.059,
+      "rows": 137638
     },
     "users_health": {
       "query_id": 8796531,
@@ -164,9 +164,9 @@
       "matview": "dune.paltalabs.result_scf_users_health",
       "cron": "0 9 * * *",
       "file": "queries/pilot/8796531_users_health.sql",
-      "pending_execution": "01M32D2HA49ZE0AHCQKMAJ0B2Y",
-      "last_execution": "01M32D2HA49ZE0AHCQKMAJ0B2Y",
-      "credits": 1.056,
+      "pending_execution": "01M32KRKBXR861DX9JD0DPFRF7",
+      "last_execution": "01M32KRKBXR861DX9JD0DPFRF7",
+      "credits": 1.027,
       "rows": 6
     },
     "users_weekly": {
@@ -175,9 +175,9 @@
       "matview": "dune.paltalabs.result_scf_users_weekly",
       "cron": "0 9 * * *",
       "file": "queries/pilot/8796533_users_weekly.sql",
-      "pending_execution": "01M32D2QTN73110Z18XT7E2802",
-      "last_execution": "01M32D2QTN73110Z18XT7E2802",
-      "credits": 1.036,
+      "pending_execution": "01M32KQK5XQ5Q67J46XQNMKVXW",
+      "last_execution": "01M32KQK5XQ5Q67J46XQNMKVXW",
+      "credits": 1.046,
       "rows": 218
     },
     "users_monthly": {
@@ -186,9 +186,9 @@
       "matview": "dune.paltalabs.result_scf_users_monthly",
       "cron": "0 9 * * *",
       "file": "queries/pilot/8796534_users_monthly.sql",
-      "pending_execution": "01M32D2Y4T4XF8G0CJFZXRWCRQ",
-      "last_execution": "01M32D2Y4T4XF8G0CJFZXRWCRQ",
-      "credits": 1.085,
+      "pending_execution": "01M32KQS769QBHD8HE5D9HY7A7",
+      "last_execution": "01M32KQS769QBHD8HE5D9HY7A7",
+      "credits": 1.748,
       "rows": 52
     },
     "users_roles_weekly": {
@@ -197,9 +197,9 @@
       "matview": "dune.paltalabs.result_scf_users_roles_weekly",
       "cron": "0 9 * * *",
       "file": "queries/pilot/8796535_users_roles_weekly.sql",
-      "pending_execution": "01M32D34HM4MXPVPV7GVYN7JZR",
-      "last_execution": "01M32D34HM4MXPVPV7GVYN7JZR",
-      "credits": 1.161,
+      "pending_execution": "01M32KR71Q92G90Z083WNA1APY",
+      "last_execution": "01M32KR71Q92G90Z083WNA1APY",
+      "credits": 1.038,
       "rows": 2616
     },
     "users_roles_monthly": {
@@ -208,21 +208,21 @@
       "matview": "dune.paltalabs.result_scf_users_roles_monthly",
       "cron": "0 9 * * *",
       "file": "queries/pilot/8796538_users_roles_monthly.sql",
-      "pending_execution": "01M32D3CYHM10DS45J41A7BDDZ",
-      "last_execution": "01M32D3CYHM10DS45J41A7BDDZ",
-      "credits": 1.045,
+      "pending_execution": "01M32KRD2H9ZFS3KFNWAG29Y80",
+      "last_execution": "01M32KRD2H9ZFS3KFNWAG29Y80",
+      "credits": 1.029,
       "rows": 624
     },
     "users_validation": {
       "query_id": 8796540,
-      "sql": "WITH users AS (SELECT * FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity'),\nduplicate_keys AS (\n  SELECT protocol, activity_date, user_address, role, COUNT(*) AS n\n  FROM users GROUP BY 1,2,3,4 HAVING COUNT(*) > 1\n)\nSELECT 'duplicate_daily_keys' AS check_name, COALESCE(SUM(n - 1), 0) AS failures FROM duplicate_keys\nUNION ALL\nSELECT 'invalid_addresses', COUNT(*) FROM users WHERE NOT regexp_like(user_address, '^[GC][A-Z2-7]{55}$')\nUNION ALL\nSELECT 'invalid_role_or_date', COUNT(*) FROM users WHERE role IS NULL OR activity_date IS NULL\nUNION ALL\nSELECT 'out_of_coverage', COUNT(*) FROM users WHERE activity_date < covered_from OR activity_date >= covered_until\nUNION ALL\nSELECT 'missing_protocol_metadata', 6 - COUNT(DISTINCT protocol)\nFROM dune.paltalabs.result_scf_users WHERE row_kind = 'metadata'\nUNION ALL\nSELECT 'cohort_partition_weekly', COUNT(*) FROM dune.paltalabs.result_scf_users_weekly\nWHERE new_observed + returning_observed <> active_addresses OR g_addresses + c_addresses <> active_addresses\nUNION ALL\nSELECT 'cohort_partition_monthly', COUNT(*) FROM dune.paltalabs.result_scf_users_monthly\nWHERE new_observed + returning_observed <> active_addresses OR g_addresses + c_addresses <> active_addresses\n",
+      "sql": "WITH users AS (SELECT * FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity'),\nduplicate_keys AS (\n  SELECT protocol, activity_date, user_address, role, COUNT(*) AS n\n  FROM users GROUP BY 1,2,3,4 HAVING COUNT(*) > 1\n)\nSELECT 'duplicate_daily_keys' AS check_name, COALESCE(SUM(n - 1), 0) AS failures FROM duplicate_keys\nUNION ALL\nSELECT 'invalid_addresses', COUNT(*) FROM users WHERE NOT regexp_like(user_address, '^[GC][A-Z2-7]{55}$')\nUNION ALL\nSELECT 'invalid_role_or_date', COUNT(*) FROM users WHERE role IS NULL OR activity_date IS NULL\nUNION ALL\nSELECT 'out_of_coverage', COUNT(*) FROM users WHERE activity_date < covered_from OR activity_date >= covered_until\nUNION ALL\nSELECT 'missing_protocol_metadata', 6 - COUNT(DISTINCT protocol)\nFROM dune.paltalabs.result_scf_users WHERE row_kind = 'metadata'\nUNION ALL\nSELECT 'history_live_gap', COUNT(*) FROM (\n  SELECT protocol FROM dune.paltalabs.result_scf_users WHERE row_kind = 'metadata'\n  GROUP BY 1\n  HAVING MAX(covered_until) FILTER (WHERE source_layer = 'history') IS NULL\n      OR MAX(covered_until) FILTER (WHERE source_layer = 'history') < MAX(covered_from) FILTER (WHERE source_layer = 'live')\n)\nUNION ALL\nSELECT 'cohort_partition_weekly', COUNT(*) FROM dune.paltalabs.result_scf_users_weekly\nWHERE new_observed + returning_observed <> active_addresses OR g_addresses + c_addresses <> active_addresses\nUNION ALL\nSELECT 'cohort_partition_monthly', COUNT(*) FROM dune.paltalabs.result_scf_users_monthly\nWHERE new_observed + returning_observed <> active_addresses OR g_addresses + c_addresses <> active_addresses\n",
       "matview": "dune.paltalabs.result_scf_users_validation",
       "cron": "0 10 * * *",
       "file": "queries/pilot/8796540_users_validation.sql",
-      "pending_execution": "01M32D3KAJ09W90KMMR6SNJWJN",
-      "last_execution": "01M32D3KAJ09W90KMMR6SNJWJN",
-      "credits": 1.027,
-      "rows": 7
+      "pending_execution": "01M32KRTAVPJRJARGKRC3XVTHT",
+      "last_execution": "01M32KRTAVPJRJARGKRC3XVTHT",
+      "credits": 2.822,
+      "rows": 8
     },
     "chart_weekly_protocol": {
       "query_id": 8796719,
@@ -278,6 +278,94 @@
       "last_execution": "01M32E25A9E8ETC4NF3ST8XPM3",
       "credits": 0.07,
       "rows": 6
+    },
+    "etherfuse_users_history": {
+      "query_id": 8797129,
+      "sql": "-- Bootstrap of the history layer from existing matviews. Replaced by the incremental SQL after the first run.\nWITH r AS (\n  SELECT protocol, activity_date, user_address, role, last_activity_at FROM dune.paltalabs.result_scf_etherfuse_users_live\n  WHERE row_kind = 'activity' AND activity_date < DATE '2026-09-19'\n  UNION ALL\n  SELECT protocol, activity_date, user_address, role, last_activity_at\n  FROM dune.paltalabs.result_scf_etherfuse_users_archive\n  WHERE row_kind = 'activity' AND activity_date < (SELECT MAX(covered_from) FROM dune.paltalabs.result_scf_etherfuse_users_live WHERE row_kind = 'metadata')\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at, 'activity' AS row_kind,\n       DATE '2024-02-01' AS covered_from, DATE '2026-09-19' AS covered_until, CURRENT_TIMESTAMP AS refreshed_at, 'history' AS source_layer\nFROM r\nUNION ALL\nSELECT 'etherfuse', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2024-02-01', DATE '2026-09-19', CURRENT_TIMESTAMP, 'history'\n",
+      "matview": "dune.paltalabs.result_scf_etherfuse_users_history",
+      "cron": null,
+      "file": "queries/pilot/8797129_etherfuse_users_history.sql",
+      "pending_execution": "01M32GCNVE64FPXEV9M295TNH1",
+      "last_execution": "01M32GCNVE64FPXEV9M295TNH1",
+      "credits": 1.17,
+      "rows": 55611
+    },
+    "fxdao_users_history": {
+      "query_id": 8797130,
+      "sql": "-- Bootstrap of the history layer from existing matviews. Replaced by the incremental SQL after the first run.\nWITH r AS (\n  SELECT protocol, activity_date, user_address, role, last_activity_at FROM dune.paltalabs.result_scf_fxdao_users_live\n  WHERE row_kind = 'activity' AND activity_date < DATE '2026-09-19'\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at, 'activity' AS row_kind,\n       DATE '2026-06-01' AS covered_from, DATE '2026-09-19' AS covered_until, CURRENT_TIMESTAMP AS refreshed_at, 'history' AS source_layer\nFROM r\nUNION ALL\nSELECT 'fxdao', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-06-01', DATE '2026-09-19', CURRENT_TIMESTAMP, 'history'\n",
+      "matview": "dune.paltalabs.result_scf_fxdao_users_history",
+      "cron": null,
+      "file": "queries/pilot/8797130_fxdao_users_history.sql",
+      "pending_execution": "01M32GCWCZJEP51JFC53MQ1Q2V",
+      "last_execution": "01M32GCWCZJEP51JFC53MQ1Q2V",
+      "credits": 1.025,
+      "rows": 6
+    },
+    "blend_users_history": {
+      "query_id": 8797131,
+      "sql": "-- Bootstrap of the history layer from existing matviews. Replaced by the incremental SQL after the first run.\nWITH r AS (\n  SELECT protocol, activity_date, user_address, role, last_activity_at FROM dune.paltalabs.result_scf_blend_users_live\n  WHERE row_kind = 'activity' AND activity_date < DATE '2026-09-19'\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at, 'activity' AS row_kind,\n       DATE '2026-06-01' AS covered_from, DATE '2026-09-19' AS covered_until, CURRENT_TIMESTAMP AS refreshed_at, 'history' AS source_layer\nFROM r\nUNION ALL\nSELECT 'blend', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-06-01', DATE '2026-09-19', CURRENT_TIMESTAMP, 'history'\n",
+      "matview": "dune.paltalabs.result_scf_blend_users_history",
+      "cron": null,
+      "file": "queries/pilot/8797131_blend_users_history.sql",
+      "pending_execution": "01M32GD0W14CDFPG8NDAF2CTZ7",
+      "last_execution": "01M32GD0W14CDFPG8NDAF2CTZ7",
+      "credits": 1.065,
+      "rows": 44266
+    },
+    "soroswap_users_history": {
+      "query_id": 8797133,
+      "sql": "-- Bootstrap of the history layer from existing matviews. Replaced by the incremental SQL after the first run.\nWITH r AS (\n  SELECT protocol, activity_date, user_address, role, last_activity_at FROM dune.paltalabs.result_scf_soroswap_users_live\n  WHERE row_kind = 'activity' AND activity_date < DATE '2026-09-19'\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at, 'activity' AS row_kind,\n       DATE '2026-06-01' AS covered_from, DATE '2026-09-19' AS covered_until, CURRENT_TIMESTAMP AS refreshed_at, 'history' AS source_layer\nFROM r\nUNION ALL\nSELECT 'soroswap', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-06-01', DATE '2026-09-19', CURRENT_TIMESTAMP, 'history'\n",
+      "matview": "dune.paltalabs.result_scf_soroswap_users_history",
+      "cron": null,
+      "file": "queries/pilot/8797133_soroswap_users_history.sql",
+      "pending_execution": "01M32GD6Z58WEVKW17X0479EKJ",
+      "last_execution": "01M32GD6Z58WEVKW17X0479EKJ",
+      "credits": 1.77,
+      "rows": 9974
+    },
+    "phoenix_users_history": {
+      "query_id": 8797135,
+      "sql": "-- Bootstrap of the history layer from existing matviews. Replaced by the incremental SQL after the first run.\nWITH r AS (\n  SELECT protocol, activity_date, user_address, role, last_activity_at FROM dune.paltalabs.result_scf_phoenix_users_live\n  WHERE row_kind = 'activity' AND activity_date < DATE '2026-09-19'\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at, 'activity' AS row_kind,\n       DATE '2026-06-01' AS covered_from, DATE '2026-09-19' AS covered_until, CURRENT_TIMESTAMP AS refreshed_at, 'history' AS source_layer\nFROM r\nUNION ALL\nSELECT 'phoenix', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-06-01', DATE '2026-09-19', CURRENT_TIMESTAMP, 'history'\n",
+      "matview": "dune.paltalabs.result_scf_phoenix_users_history",
+      "cron": null,
+      "file": "queries/pilot/8797135_phoenix_users_history.sql",
+      "pending_execution": "01M32GDK1BM4Z1SD4QHJDCRQ83",
+      "last_execution": "01M32GDK1BM4Z1SD4QHJDCRQ83",
+      "credits": 1.025,
+      "rows": 1235
+    },
+    "aquarius_users_history": {
+      "query_id": 8797138,
+      "sql": "-- Generated from scripts/pilot_sql.py; T1 address activity only.\n-- Daily UTC buckets. Metadata survives an empty protocol and is never a user.\nWITH source AS (\nWITH routers AS (SELECT contract_id FROM (VALUES\n    ('CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK'),\n    ('CA7RQDMMV6E53P5EDZA5GPWBZ33AMW2ZNO42XLI2RGRIAP4QXIARUOJQ'),\n    ('CB4YHF4ESRJ4XZRXISLXSUZTYY6YPBPZ73MZWSTUWY46DKYW7IGLHGF7')) AS v(contract_id)),\npools AS (SELECT contract_id FROM (VALUES\n    ('CCY2PXGMKNQHO7WNYXEWX76L2C5BH3JUW3RCATGUYKY7QQTRILBZIFWV'),\n    ('CA6GAFOJCW4MGQQBUCQUSA3CLIH25G4SNKB2JHYKZCVWZTNW5VXMSC4O'),\n    ('CDUX476HQ4JZBPLLVEVRIVXDRKAGYDNDL7OLBE5DD37JXOUFI2NACXJ5'),\n    ('CBP67KMDEOZHRJ5YM7DS4MOVYJH66YCEFCVBDBQVNTI46X37DU6KOZMB'),\n    ('CDRRLXLBXYVENKIUCCTFUT5WW6BW43NJMAPEMGU6VIU74LV6526OLS35'),\n    ('CCFGZJTHQZGDZP5PK6WMLKHKJ72ACSVMJGCI2NFR7Q6EAVSKWLJB3ZH3'),\n    ('CA6PUJLBYKZKUEKLZJMKBZLEKP2OTHANDEOWSFF44FTSYLKQPIICCJBE'),\n    ('CCLZQDL5LY2DBPNNFBRKPSROGFGTT7Y7AI2SM6QUI3SUTTKA672X4PDF'),\n    ('CDE57N6XTUPBKYYDGQMXX7E7SLNOLFY3JEQB4MULSMR2AKTSAENGX2HC'),\n    ('CCF76DJMOL56MGFFKQ4U5BY3RSZC37R2F5F3NIW7MPUOKFRY4LOKN7EQ'),\n    ('CDGAAOKSMARPIFB4N54BBAHXPZ7QMESGUUSLZ6QGSFFPFWDH35D72GFH'),\n    ('CBFNCIWG4HEMGSAAR4DEVS2DA7JWQYH5SQEZ6SR74HOZCSP3JNCSFZEA'),\n    ('CDU5EDRLORSCPHZDAEVHNOT7EMRLWSGHRA3WLCXFGUNVVY22PLEWNBBU'),\n    ('CCWURHLMAE7M7KBB6JAEMHGZQVENXMF73VTDBBFPK52Q23JRFUVY4JLS'),\n    ('CBHWO677JA72CGF2SPTWISMJP7PQTT7NQBIO6W5YQ62UJBF55IN34F26'),\n    ('CB7L2XGIQMJX2VO5BEDY7Y4BF5RNXBGA3N5QUEMYGIFHJOXRHDMF2C5F'),\n    ('CAB6MICC2WKRT372U3FRPKGGVB5R3FDJSMWSLPF2UJNJPYMBZ76RQVYE'),\n    ('CD4ASKG2XVZRAUXSXPCGUSBIX4JOC2TNA2FDBAPUNJB7RSUG5YGRQRSF'),\n    ('CB7FKGSTHP75ORTIZGGMVUTQLEMVTSEOI4QORQPCABJSGTAATDFCE2YV'),\n    ('CCSY43EHJAHT3NQDYKAMJXRFBEEH7OXDL3J3VNGO33UUSEXWNN27GBIZ'),\n    ('CDPKDMH5WQDVNN3TVOYAJLPQ27HVPPHWKD6C5APMZSRFAJAWZYSEA6PB'),\n    ('CCZIETBWABI4H7NONISQZKGI74FPUKNLCOIWQJ2RZIMCYIFOJAS56LTN'),\n    ('CCE5SYJ4EJDVN2ZNB5A3DE7UOLLHI2I3J5FOFO6U6BFSXRGMYQ6GOTH7'),\n    ('CAQVZKCFWX4HT3C3RUXGR7OETDKRMN433M2QWUXC5X64WE2FKDUFA7GQ'),\n    ('CDFVWNLPXHEARNK7RT6Q42TYOE5FC6N2VPXH5GVJ7N6H2PWRKKNPOENC'),\n    ('CBUTKQ3Z35FZLUKODPV7MS7NHWA3ED4IJZL5GOBQQQIHQIL4AFGJS45O'),\n    ('CBSJVUIJEWSNJ7GCDMRW22VDBDQAG4ESR42ECZGB6X4Y2J6C2UAR6LSY'),\n    ('CBPSJKMTP5SELRPOKQECDEEMSMSWJKKIRUXKOOBHVWDTPNR76O4E7BSZ'),\n    ('CAC56QNJ2CX456TPC5S4MSOU3DBULG4TGN7AZ2SAYGBLD3GICFMZBIT2'),\n    ('CASDAEULZPRO2GFVBOGEWZNNG2JR2JHH4ORBDC7MYOZLBKF4XB7SALYC'),\n    ('CDDLTOODRYTIJE4KPS4BIIXWPLVMSIYVG7GE4W7MG2UBQ3QCCET4SUFA'),\n    ('CBYHINSSG47ODHUV6ENPZRCGISZE6G3WKZV3OOVFAMFEIRTPR5CLW7QH'),\n    ('CCHOYEP6SGO6I6DT23TPSN5MKUE3O7OT7BXON6KZI5CD47PEH7EYX5GW'),\n    ('CBA773WXS4IYY6UBRB5UYWUG2AVJCJQFUNY4R6V6LRXGSB22PPI4JUHD'),\n    ('CAFELOFDTDFZUCLQ75ZBIQO2JJOLJTSDMGCDPSO2HXAU55VPJHE2IS5K'),\n    ('CCMD6523ITIZX7WQEWCGDJE7FHD6AO6VSLWJ6VFLLFFPYENY6CFREMNK'),\n    ('CA4AU6O7V5HL5SPDRERKWRUG22KIPVOA3KOHCWZJJUYQ5NFKC7OAUIW6'),\n    ('CAQENB7J57NTUWKTPDJ6CRIMI734US7Q2U2VXRWTNMMFSVXDTPWEUJGU'),\n    ('CDPBOIGPIMZW7ZUHXHDEIE5FN4GXC5T7HCAHT6NKAIXMNNZWPBHC3W54'),\n    ('CBM3E3AV67FLU7AJTEYJCR7VOW63KKTHP4NYMMESXRGP5BIHKMCFZ4C5'),\n    ('CBFXFTFLUUIBQGHLMSI762JUD34NHLFZ5AGPLEQ2WJ2CEQANDPZODNVN'),\n    ('CAALB3YN5DGHR76IEUERNLVRCHILENPCZ6SSU7YY2F4MY5WTYCKSYTTU'),\n    ('CANNGX6237WS6E3VS5UVY6P547D2BTZ5PEX3XS2Y2F4MTB7EHHRJILQR'),\n    ('CAWRUZOOSKHS5AKN2PLRTCDLBCT2RPFKYL7DRAI5Q64HFIKUGK5YNZFV'),\n    ('CBNLT7K2DUJ6U4HR7RABYQSDZ7AQYQIHBWO7SYCC4XEUOAF6OTOMHPRT'),\n    ('CBQRTFL2DNYL3DQDFL4FYGY2RLX4QXIRE3MHRRHB7O5RF3GHPVCZYYBZ'),\n    ('CAI3PBFR572FUXEYCZSTJ4HYTL7KF4EYTKHJB7KJSNYTN43BDFPTG4TS'),\n    ('CCP3PPN6A5GRAGZTQAXYWSROV4QQMEE3FOR2IXSYYVOXCXPMZRB2QAWZ'),\n    ('CD6VHCKSUPGQVQPEQUI6EAEO6Z4PXMFTPHW3UTAOF7W4UF7TH7ZSKZBG'),\n    ('CDRAJL4B6PV3U22H4VBM3PGOEDG6AWCDBJHVUMQSL4LHH7RF4JZPTLV3'),\n    ('CB4FDVJZEL4KE4ZEY2BSQ5VTOXZDPV34ZT3YO2AMW7PPOTH5ONF2GXHD'),\n    ('CC6MJT4233D354EZTYWRTF6X5LS223C3TEUPVEA6G5KVTV5SYSEVP44S'),\n    ('CCPHQ3GS6TMBGEOFMXARRRQ35LTAGM3A4OFW7EMRZG2SJFSBD65XZFF6'),\n    ('CAF63CNDJBATL376WDN5KUNN32JQKNYC26SQ62OLXYMAWBYE23P6M5WT'),\n    ('CDD3OQDUVL3ITL4ZJF27WVSO65PFEQQ5AOHEUPUHC7YNL7VUYM4QRLZ5'),\n    ('CAGG5WHOXR72BDDMLIN56Q6NP5SBJQJ73RMOOIL255FNRFWZO55MATSO'),\n    ('CB66IZEXJMKBAUJDIQMNGBSQBHXKUDPBIPEINZEOUMOEKC2NKMSFVFZJ'),\n    ('CCZC4HGM2BW7TIIS4KBDQEZX67DFZLOL6TZXGUGD6SJZS6IJ5JUAEZZR'),\n    ('CAI57H4HYE2TNI2MM4LYAZ24Y3XLSBNWTSNDKNTOYFOBHYNHTMQAXN7W'),\n    ('CDOGKTAHIINHYDL3BUYDVKIQDDJI35IBMLOUHC3AZC6FNJFT5ZC7BYDJ'),\n    ('CCOZA42SRNHEMT7SBPAX5BG7BJXTTCHJ56FYCQRYB35CP5WUVEXM7B3F'),\n    ('CCWNKTTMHZ4VRR3FYQT3G253MHOGRLUEVTO6YPENM7ZN65DGC345LHI6'),\n    ('CCJY3VRDZ55SQVD73RO3D6LPT33AMUYAQDDTGN7OHXAEDPQPRZ2PCDJT'),\n    ('CAGONMIX4RL2MPHP6INYZJEFIZ4NQLE4BAU22EJBJ7HMN2QC4ZP364ON'),\n    ('CBBIRRHJGR3W4YTDBSURB3X7GMA5BN3TO6DZJYKXWNFMXEMPXYQCNYGU'),\n    ('CBRNBLCGEYOEXD2JVCT5YEZ4RZY3IPQGYEI2D4MKSG7I62NWYJFZ2JRY'),\n    ('CCS2D4NOERLQH7HL23HMMHW37U366VVTQAYHLUGFKLRUWMRIRP7RQ2MF'),\n    ('CCON5USQZ2SHOILAGTH6PAQOECE5ZSHKWY4ECHVQUPQH6ZN42J7NTA2N'),\n    ('CBSGKBPK6CU2ZZKI4T3GRDWA2WBEQ6ISXI5MWFMAO5IKIYAHOEUODPHN'),\n    ('CAQODUH4XNX2NTFVACRMO4UR7MA5RLSZA5ZQTHILQYGYYCFQ3LUATIGM'),\n    ('CBRGFMR6QBX7ASUBO534UDGOUB2SDGRL7AAFXFYBQ4DT4RJTWQG55W2T'),\n    ('CAUCGDPDPQL4EPMPPFST63VBDVN6H5LMDYM3OTBGJQZTCTM3DE4IWWWB'),\n    ('CDKVJYMN34ZIEXSLNFYHVAFF6M6FM5E2U6OHXOTBKH2WLBULXOE53YDP'),\n    ('CD65EROVLTDU2DWM4ZUJF4NHK4A46DX2UAOGCV7YDFPCSLFYNH57KGIY'),\n    ('CDSVWH3J6C4FJO6C5CE5LF4VFPIV5WLMNQQKSNWJXNKLONXK5PAZ4KAG'),\n    ('CBRXOYKXPQI4EEA6KA35TUIYN5OJLNWMTIVDOMNOIL2BG5Y5LEDHUU7V'),\n    ('CCQ6SUAEW4REXTXI5ZL7F2UNXTZTQAORQIPCCNWQWT3SGNYWZTTDLFTT'),\n    ('CD656U6QQK5VEPB4ASHALPMP3LIM3Y6ZKBEKNLSPIO3FBO6YIDYQCM4R'),\n    ('CBW7MXDIGZMY6UZN6T7P6J2AFGOVZQ6ZMF7IPHUAPJBD2S7J735UI2O6'),\n    ('CAEG2CDYEDSSZKJS7MWNINVBC4CQZGIJQ36OKSGE3A65VRSBDCFSE544'),\n    ('CCMHVBZGY65EIFQZLZFRWMPMM23MWK4P5RFKDFWEPA5NQHENBNWMZETZ'),\n    ('CCBB55HJJQNOA56FT37SI3B6EYJ6VMW2RB4BZJZGTEZBT5QUMN3DUGCQ'),\n    ('CA2JB3HAM7PWI2WCOW22ZEDKKIGJEWUDIZBGICITRDN2TAJ2QLWVTLXR'),\n    ('CCO2HI5HGF6KVMA65DOIN52BWA4P6Z6T6HKO46KGLZXXIUB3KZ3K5W4E'),\n    ('CBJG3RM3KFLJQIFCAJMCK57FY3YOQ2ZDKEAZEGAYH6JOCPZONBYJOXFZ'),\n    ('CBL7MWLEZ4SU6YC5XL4T3WXKNKNO2UQVDVONOQSW5VVCYFWORROHY4AM'),\n    ('CD5N56WHTHT3XOB6BQBEK3OQFJUC3T5XGLIAZOP6GTBXZ6CLTEQKFY5Q'),\n    ('CBDSM7QDGYEK3DRM22DH6HG5CSKSCKKOVBJR64UT3GSHOOK6VYZMSLYG'),\n    ('CB7VREC2IIH3JWQI2W5HL76TZLVQYTK2MW5M26UGRO6AFP4V5XMIGF2P'),\n    ('CC3EWBMN2RZVWZT2UPL6PRU5LU5IH4NM2QVV5IY5Z4FQSDAZF6DWTRB7'),\n    ('CC5E5HX5K5ERF6KIKGXCT3UPNBKI63YHHQRBB4C4CKEUWL4FA22VOJ7L'),\n    ('CCDLVANSRYQ4IVO3A43UJAPKIWU2324D54NKGHCWWVCVCX2CNX2K4TAR'),\n    ('CASUGCN324QMLAPWG5IUSXCFD3GZSREDEH54VJCP5MOBOEXDKWSYR2TS'),\n    ('CCGYZEVHBYZVUD2C2VPREQRIBBV7Q46CKIP375VZTWQU7553Z3X5YH73'),\n    ('CBUI26GBSGZ6UK7OA5KEXYVZFBGYK5YNRXU2OTFZA4HPGGN44K3LXPXE'),\n    ('CCPQAGAPB6J4WSO4A3SBRROTMYPS4YNBRSNHVNLV4GBPSBL7IOBIQL4Y'),\n    ('CD5TL5DHDYBUZKQDCUZNO4RV5SQMOG75O5APJZNYOZJJQVHS3ANKDSGQ'),\n    ('CCSNQECGJQ7O6HZJ7IUALVIEMS7F4XUC6XPJVGEEUH2V6SCXG34M4BEI'),\n    ('CBD5B2VXYEQUVQSANUEECOTHUUA5LWFWNE4XCF3O5S7IC6HG57K4M7W5'),\n    ('CANOS4CG7YMDIREDAQIIB2ASVDRTIEPZ36HRIXXC5CDZE45XE4OG4ST6'),\n    ('CDTWZY36RYRZZLTG4AYQ2WMUWQMGSZEH2TKMXBDPW2E7FMNXCU7N3G3K'),\n    ('CBLPZUFE6WJ7FNOTZINEWFDFKHGDSQZOLVCYLGTAX4JC6OABNRWAFTI5'),\n    ('CCX2TYR4AQTPPMTZOIMP3YIBHAYLLSTXVP47PAGTL753PCQFSKV32MIA'),\n    ('CCRVANX7N2A4EZIDFOWI5SJA3B37SZ4XGZFLNIP73GN4Y5WZWZ7KI3BJ'),\n    ('CAJA6SK462MAOIB4ZC7WSCJDOKOV64NXZHEVFHILX7PLWVN6X2QJN5WW'),\n    ('CBLJSRDUEOST4R6NN6CDT3VCTT5MKHLEFR4I2PQYCZKYDJDCF3TYZZ7B'),\n    ('CDD5SQ7AQ755HGVNK4SOL5EWZ6PNPCZ7HR2XSF6WU2KDX6ZGTYAS3IKE'),\n    ('CBSSJUU3QMZDSUYHL6K7Q5446LYWPTXRWJZFM2HBTATM4AUU5VNHA3RK'),\n    ('CCZ2ZX4VSPGP3VAECUVTIMUORYZCOI7OL2E7CT2YKPWOI6CVUFPLFV7Z'),\n    ('CBEJQ2XDYBIPHTKF6E3RZ54UDV3AOM6LFS7NPS4LOSHWDGX2AJOYVU3B'),\n    ('CDKL2UY5KYE7EOQJTQH4YCV5SPEIVSXWCTW5DIPLB2CVS33L7UIMYH3N'),\n    ('CCZ7COTQVZGHNPYCCZBGAQS3DZXNP665HCVT2EO4HWCDQGP3SP3Z6YA3'),\n    ('CBW3BURM3T75RJH2RHULQMTBOLPD42WW6DGB2CWEVT6ZHBAFNGWNRGWC'),\n    ('CALRUZQCHYNLXCXWBANOZGITWLYMDK7FPT44EDVHUTRWBQ67YU4N2Q7C'),\n    ('CDRQCKVRPFNXUKXKS6TUFSEPFLP4TT5DP72M7YNHPHH2SVFWUQHVIJ6Z'),\n    ('CAIOFLKJ3DQGZR2C2OF2QA46ILIUT6ELTQIVO6GSQRTKUVL5B2EWMA4N'),\n    ('CCEBV2EC6Z6TE2632XXTEBD6KA2U57LRIEDGV2SU77BOF2HKKB4HDIM2'),\n    ('CCHNAJ3OFBBWTAOI22DAR5ZDXUZ55DUSMCANMEJIHX7JBA67EZUI7FRV'),\n    ('CA6GS7YVJ3FF4LYCAZKNFF2MD473DFE4KOOKSXAKYHFMIZZON5HKYGCN'),\n    ('CDPF7GMA3OLVUBLEVKNKXKEFSS3EQAXN75RHT7DR4SYIHFS5LH5JOTD7'),\n    ('CAADCGQTOUUW3K3ZAKCNLTADVCI77VBPTSLWCIK5RB3BXVTAP57UWOTC'),\n    ('CBL2RMHUTL6NHEITTW634NUE2LUMQ7W54KNY52QTXUXJBLFBMFCF2NVF'),\n    ('CA4EA5ARJZUSDDU2A6VHOEMFUYQOZQABIT7BCBS63BC64WDLB5GFT3RW'),\n    ('CCTSL4PIN4DSIIY2R5JX5GSZWFIPWWKKTGIYM4IZ6UBU5RSJTUPRTWAO'),\n    ('CBPAHOIHE55EUKTQGSY23WEHXLIEBKYU6JUCH76WQ67T3WMTDEUBCX6U'),\n    ('CAIJMR4AGDGHIDI44MCCVWTZECXSCUFVVF67RV5KMPTC4PQLYKTFFYUT'),\n    ('CDMGXLUASLRCSMIFYTLNKGASA3DAU4UA6GWAJQ7WQIFL3HND3WXU6ZYU'),\n    ('CCC2KUPDPTIBWB3GBTMJB6IKBNJKWT3WUDYXEWVDX2KB4WLSRL2WGNU3'),\n    ('CBC7VX5EKQJBYAMIWYFRQQG2K2GUYULXHO2Y665YHPFZLWEPXBNI6LR7'),\n    ('CD3LLRLBD53BPVKZCRCXGQ5Y2QVVAY7TLCZPLAT6KTWT6SD5SKETRJVU'),\n    ('CBTGLCDJ2DFOZF7C73ITBACMNX2MFCT3ETJALUSYFACKQBTKIOLXXUQK'),\n    ('CBPDULTUWWPFOOJAVJIIZIZH5PRSIEPWHYDW23RM72SSINADWYO6DJE5'),\n    ('CBYMDNTENBCYE5EYO642ZBTRJ2D5SPY3PAJO5P5BTYYWUVOY5N37A2OE'),\n    ('CCPR2Q3F2TPOVKPKTAHGLMMWPL5RBNBYDWGGUNBYP7KV7W245IAJXRI7'),\n    ('CBTQN4N3DSAGPE32BUVXBU4WBCXSW25L3NIICUW5BXNG2FSQIJ7EMQDX'),\n    ('CCAJLP7LGRS4QUBPDI3JDY66IQLDBKWJW6Q5OTI7C74N3OJSOIYEJCDB'),\n    ('CBTUGNROCSTKKK2HUI3Y5Q4PNLCOXQGBT23S62FA6CMDZHJWY6F7KY6R'),\n    ('CDSIQQSOHGILXJMV3OBTUCIMI7XQBVGNKWM5PVVC7ZGWYUWYABKLGXVO'),\n    ('CAKJT3HBDPOVJW6F5KJO56QXGWEZ3FHGUDBHBRQACWTBFQGWR4QXZWSN'),\n    ('CATP23X4FIYDOSPTGJVVI7RTINYQUA32UGG5CORAXDGUMJCHQFFCERN6'),\n    ('CB6IBY244DYNEWMG4P5TVXR44CXL5QAGLH3QIJTQCT4MSDXKC3LKRMC5'),\n    ('CBC5SYJYQRPBP7CV5LEPZKOZWAJWMOICO4BUFAGM7S2DU5YCSMKLTDA5'),\n    ('CCGC7E3J5UB4JZ35VMDTGM4GPVNOI4XU7UCQMI4E3I2DP5L2MAZ6JZT4'),\n    ('CAOSZ5OCJYWPUOGFAFNU7RCNWLMFGVKFOOI3SLKICNQCP6URLW7QGOCO'),\n    ('CBUAQYC3JPFSDMNIOS3IA7VJG4XMB3ZSHLLDJJIQHAOQDLWM2KPOHRAR'),\n    ('CDZJXJN3E7BGKAEAVTX2OZXW7QXIKTAK3UNU3R5MAFVBUHT3IRIKAYB2'),\n    ('CB37QM6EHVBDDNK7MAVQESV7WPLKV6G36TR7MHAOYWPZXLPQUWSDOK4E'),\n    ('CCVKDKAIHBPLWONBSS5DRFFZLP7WWAHK43PAA6XVTGHF5I3OMGVSBCDP'),\n    ('CDJ3J3MSQIJLMZDBMXNH5MKGOFCL2TTLFSSU5SFI3PYYJDFHWEH7EB5E'),\n    ('CAYHCKBYLGW4A5EE5ANDRDRKMO5UGPU3CZJMDLCKDC3PIRF6D6EVVHPN'),\n    ('CDQVZWIT4ODRWWA5K2YWIFX7Z5KA76ASJP6UJLLAPM6DWLKU6RT6THHL'),\n    ('CBKENQ33KITYE4JKPAWALHU4KGWV5AXQLJFUNRNIDGCRLRDENX6PYVDE'),\n    ('CASL4PYESGRCUJVCSS33DX52JBSRWSZJEADCMPNL5CK4UWJJ5WQPAUMP'),\n    ('CAC3AUH3A3ZCABCOPDCXVJXSIL57WHAPGUPTKAOMSNFLAVE7CPPGNGZB'),\n    ('CB7NBRNRMSZW576ABOBGCZCPC6RB6FCFNJTABLVI7FRTIBWFE3MKPBEK'),\n    ('CBG2QNHFV3DJTKHGABZ3ZRCDWXE6JB2FXTNVXPSOGZUDHTTH3TQ7CGRM'),\n    ('CAGVJTI6LQNGHH56RZY7BHQ2S2PGPCO4HVVTJLJLRUZLCBEU76W7FXOY'),\n    ('CC2QQVENM4W4C6DW4WZGMZSW4WI6ZWFISHRWVXMTWPIAHMB77IOIP77C'),\n    ('CBMOKFM4SNJ2DAUZ4M5MJSP76M2A6A5V5CTIIJLM7TTPBRTRTLTATZ7O'),\n    ('CAFA2BRSNIN6MVKY736R3237W6PFSBQMWOJ5HDTCF3Z4YCCCYLV2N46R'),\n    ('CD47PNGQZFFQ3KMQJXLMK6MBX36WEIR6OIFRCCXRTXJE5HOA2GWL7L6G'),\n    ('CDCT6W2XW64ZCIUEMRG46CJVE734SZDL6WDEH2QQOABBNU2XUSCTQEMR'),\n    ('CANI4O7DWL52SXP6T2NF5OCQ5A5LSV7WV5BVZPYFTAGSPAB4TTEOBLBN'),\n    ('CBCIH74PZSVS4B75DI62X75LG7ZGM6WGAORBMNNJ2OZGPURE5SNI2SEB'),\n    ('CARCLMAPEV4GYZ3TTFJDQHSNC7PH4G22UIMMER6BZW5H2TYZWWMW7FOS'),\n    ('CAECPXK6XOZT2TPEZ52C2VJOMOTSMYY475SFICTWXHDN74UXJDKMVKXD'),\n    ('CADN2Y2HDRGBRSZKY4GVRT2XD34QVYIMNVLSNQKSYS3T4RUX7LBIDIYE'),\n    ('CD3KLMNUKIFGB544YA4WM4MZYZ52TQR6EOH6DBX7PTSENIVL5GR24YJS'),\n    ('CATTIXSGLPAJQAWTNRRE2QZGT2NQKFVJWBMNFPFCDHVONXWAAQTS7T5O'),\n    ('CA262ONRV6P2IZPFVCTQNIU5XZIPZE4RLZNSOVJUNFUWDQR6MBNKS3IB'),\n    ('CCI5UGNCHE5PBINLZKSFFCMBUVJYWYDPKDZS54JD6TGJBA7MCG3YXNT5'),\n    ('CDCSXULBM55C5ZRP6L4E2T3NA4ALGVXNN73Y6HJXTHHCDAKUMIHGPELO'),\n    ('CD34VG5WGCNZNR7K5B4JUZY4UDBCEIJP6QOWQ7YH7CVE7QSJASOLOJ7N'),\n    ('CCV2HMOJS43357J7ZZ7XNTEUK4XH6OZTDUPZPECDI5URTMRT6Q6NJC4F'),\n    ('CBNC2YK4GJVKHXLREPHWEP36INL5PGZ2S2QOCCYFNMNOTDX3UDA3QAX5'),\n    ('CCMGGRYXB4W6UJEIUDYSWXICG6VQGVGNRFUU5MLUJAKXGVMMSSZCURB4'),\n    ('CB5PXRKQKWOHJ4P3MDCNHZA2N2MJQKZ2EU2C3NE5WOK6QQH6OLLFECNI'),\n    ('CDRUMPLWTENJEENBHQL3HWWZ3C3X53RF5VHI7N34A7GYVOGVGS7A7YDJ'),\n    ('CAOBPWLHSERILJTLOH4APQU3AXUGQBOKLWDEM64A4AZG6XFSZHBEREDW'),\n    ('CCKGQSQG5JLZBMYMB4HT6M4H7FUC3NK5C75MIHN6627LRAY5B2SYL2AD'),\n    ('CBN2N5L4UM5PPQE5UQNC3HVGT56TDQMAXMT3LVFMNN6XLFXZMCJY6KOU'),\n    ('CAEWYN6FTXOY2H7HZRE3N5WX2SQNYHC4AW5FUOXDAQLFHKP2YOPQXYGS'),\n    ('CA2RSELLORUEXHWP6QRLT5SQM4UEHWZULQILUWFRLRFQQSPPLUHE2KWC'),\n    ('CA5DL7ZFP55STN35ONADCOUULUKKXP27IKTGJRAL6Q52KSIB5FX3HYQA'),\n    ('CAUP5HVO6YI5UY26ARUCZ6L27AQVSLHRRLLCNIBQUSPHEU5Q4CRK3JLA'),\n    ('CDE75ZVRXSNUEDUY24AV32I42GM33L4GFAXHQSE245W72BTZJLJHVG2H'),\n    ('CB6R77BOKO24UOQNZSB4UOMAJ4M2I5T6LKEDXS4TQZLJXD6MNA5WMOWB'),\n    ('CAZERARL4EWIJYX2GRCJF32LG3S2QPL4CMPIGHNZHFAMMNXEARAY5RPP'),\n    ('CDGAYA7ZEK6E6SZ6RN3S5ITD5X2NU4N2X7PTR5SFXAEDTI2PGBZX3UMU'),\n    ('CB64A6FEWKK4YRWRBNWJDZ4EZ6RI74FB3MZWNECXIBL4IYC2USMF2ELV'),\n    ('CCJTQJLFA3NADXNBR4BIDV5NMFACOMUES4CO2UUOXQGMOP4S6RFL5CAJ'),\n    ('CACIDXIZXZHD2KM27ETPAFHL4N4RB7MNQ6RHKLNACNFTQOMNZK3FE7ED'),\n    ('CCLVDZIBCMB2PXKOMRG6IEBD2UMSBEVRPWTRWUIBIZGGKYVQFQ6FRYTB'),\n    ('CCYNRWTZBINZZ3CZ6FYAUKRGTRVZGCIB33CIGJHV7MFPWPNK56NTAXEW'),\n    ('CBDRLPPJBF2LQNGEEGRBHNLFL5QCMKLKP5BUCQVX3HKRTXODHTXEQRZ6'),\n    ('CAFHLHGZXOVNCGFJ7DOXL7JDNMBCEZKDI3LS5NRQH3GXC7CSIMQZHUSM'),\n    ('CCPJLNXL6YBVNPKTH6ZOXBWB35GTKADVN4WQJJWLBGWORZ2EBK6VOTRL'),\n    ('CAJXBOGWSRFT7Q7ZKHVTPWGODOBBSPYQVKN2WSMN2WFMPAXX2CETEBAZ'),\n    ('CC7DVVEUOQDASEXFVZZJYP5BUS2S3CYBQOSFO7USFYLUZDVCFFZ3QUMA'),\n    ('CB6E2TJAPMALVDDAJ4IM3MLRSXDO73YEH636SRZXYWLVMZSCA4THDMYI'),\n    ('CANUOUCL366FPFUY6VXYMV4BELMOHQNDO5W5IPC6URUQICZGGFDBTYMI'),\n    ('CDA5MPSMEEXEZ4AHQULAY2V3VFO4M4JWC2C2MMCHSQUMK5DP6NSLAVHO'),\n    ('CD2UBY4DOGL3FETXUNMSSEGKQAL35ABFG6WMO4P24GK2SH3GULFRCKFA'),\n    ('CAQXW3WZKODG7DXFDFQ2VRY4EVTBBJLJ4PEQW7DBSZHXEJC7542HIRQH'),\n    ('CDMH535JSD224YXPET3B4SJOLXTQQ24GRSCWACGYBKSH2DKFJYWI7SUW'),\n    ('CA4IY6G3V6JXS4YENHOFLTU2IHWST5ZFG4XGIDGDS6IXUORTQIY33EAZ'),\n    ('CDFNPMDIWKCTVCDP2K75RI5J4FIKLTSZBWBNLS4BQVT6AS67MRD5GV2V'),\n    ('CCD3P3RNXORFN64OH46ES6EADO7NUDWXUXWCBU42NN7V4SUPXPFJWED2'),\n    ('CDTDURXP62KOZNS7VUZGY4Q37JGJRKC4CMCT6RUNQVZDEBJQZOQAMFOY'),\n    ('CBHA22UACTWKPR7CPNFXYVX57QXQVOEPTWKBSWFQAPN7HB5GEBKRJB63'),\n    ('CA7JPXK5XK4DMGPTDUP4MA6YWYGRX7SWR6AJ2RLMDKUB6Q5RBNFJFSJP'),\n    ('CA76YPZXQFP6JGJNXYQI4SJRDH5ERCYF5AG7OYXNUTC2IBZLZOAOK3CL'),\n    ('CA6OBAWHRFU3O6VTJONDYCS2XUQ4OVLG2WBDS3K2CETT2ERRDQ26RJ7S'),\n    ('CBGSR4FCHGM5WXDIY6YD4T6SSS26HHGIJCXGVIQ2PFSO7EPLMKBZE3KW'),\n    ('CDAQRXMA4N2Q4DYGCLMCINE72SDLE2LAW7OSIZANM76NHHG5DZF7W5K6'),\n    ('CDNMOZVRXKZ2JCVTDTGXZRWH5EVGXBIR7NDUNMAME4ZYFRIU7DPBXLDF'),\n    ('CARBT6Z25NNE7PD24BFXXXMSRYZUGFA5RHI23PMSIXBUVJZQLS56HJLP'),\n    ('CDM54I2UGJBIDCAHITKTUV2PKBLAA4G25AIZNNOW24UTHAAV5NSXNXDF'),\n    ('CDI54BFBGPZOAX4JARDQIHKRQ6U73SAUPLQB26KUB2J7JCBK2HDCDYSB'),\n    ('CA242XKXANKC46P53M355OPYWMHWPPTKQM5T5DNMOBWJMHOWDLNPJTN4'),\n    ('CCQNVBS5ETNAINQQEACPEP2ECG3ORA27VG2CXOSYV5P5EDM4JNER6X3N'),\n    ('CCEQJEUOYHFPY423PQC56UFQK4EK5JEB6A3I2MEZ25QGR5F3P4DCGN62'),\n    ('CBKAMBR25ONQLTJO7NYMJUMAHRJOUR5NQZGQQ7R5UZALTBPPYWDRVIZ5'),\n    ('CDRPQKQ7Q6IL75FVVHYKKDGWEDBRSTIPLWMECFBCNUG22VSXXZ6ZL42L'),\n    ('CDD2VFQCJFZNPNQ6YH7A4PWKA2QODQ5XQ4EO3K2D7AOYQRTHNZZWZPFR'),\n    ('CBTJFBRZDAG6SJFJHPUIGCCC3F2KKCXC3G3H2BTG6B7GBOPTPSI4ES3O'),\n    ('CCPMQFGSSMTBLHO4SLDPRHWAHSWDQICXQPW5WM54KDPB7IRWEWLZJUQY'),\n    ('CD2O2B6PWKXDVFXMHXHQMF25C4TWOSQAENA7DNFR5G27F5CHJ7AJP5F6'),\n    ('CCNXGPE4AQCSNEBZO3XJDKKDI3CRLYMVS6UWBBTVDLALLWMJEXBORQ2A'),\n    ('CCIWM6V5NPVMQBTDD2DWVTFLJHV2IB7I3V6KLNDFFFCZEHEPC6FKNCXB'),\n    ('CDCZJS33SL6ATRYZOSGHTEKJMGRNAQKMV6LL36JUKKEPX3TAKUJL2LL4'),\n    ('CBXCELPGAJPHC4XXYBOYLWNLH2IZBUNNXCR4IIBNJXL6BSVTHSLAOJYP'),\n    ('CAM7NWR7INGYXWJHAJXFPW2BDLORKDXAAUBUTYE7IYUQ53HIHJ7MRHVM'),\n    ('CCLGEOD6PIQQNYFIU4PQXNGM4455HHBD4MGINN46M2KTIVOWOWDTITCQ'),\n    ('CCJ3XJR5VODGJHH6BQHRUVOA3FWMQRQOPLUZNKLSKFKYELZF767P2DOR'),\n    ('CCPVNWJPBIKEYSVDF4DT6P2PK5RQDTC6JULZYRTUX3RDS4S5MS5KKSOG'),\n    ('CAP57XRSVYQ76M7LBDDNL6EKZNVMSWLWQIOXDD2XWF7ZAQAOZEWROCVX'),\n    ('CC3JS5VIMZWQENG5OC3OFLMMMC7JTDHXA45M7IEPJY4ULQDAI7DA2IFP'),\n    ('CDGODCYOS5SBQMHAPEFNDVIR4ZOHHVACAWXYUZRLW4DJ3KFPQQ2TVEB6'),\n    ('CBWTGYOY2V372AWSG7EAG6Z4R47L7OPYDJ7Y5TDYQDHXA5EJBRNKSE6C'),\n    ('CA27UTMXHLQPISZUBIDCSYLAVCCMDD2F2PQBPVTVZBYRTEHLSWLTYYU3'),\n    ('CDVJJCKX2KZ2SIVXRVXJZOPOGYF6J7GXY3F2IHYR4UW66DDCRJYAQCAH'),\n    ('CBV5CUMDI6KI2D5BY4C4ROG5RJKEBOKATTYPWSRXIZE2WJHA7XEFALXL'),\n    ('CCXKWPUUM5VKSHHBGYOLZHIEU5DAXINQNJ4Q4IOTBYEEWUTA5S6A3S6A'),\n    ('CBGCTBE3YMCUXRYIEV7F2ULJYKKYFTQJXU7P5G4IMMVJN7APRY2QH7Z6'),\n    ('CAMIMH7AIHOT7EUBXNM2QAX6E7LGDJN63D4DTOH6YRRWI62NDYJVPJ2F'),\n    ('CD2ZV2IM4AF25ZJJYLPSFVKMBXGTJF5ZEH7KV3Y5SI5SVTLYLS7G24GK'),\n    ('CD3LZHEYSGPK63A76ZXQCEYXBQZBAV3X4YOKT6S4JL3KBVB4B2JP5U2L'),\n    ('CBRGXAYNKSFRM7RBIYRCVMTNMAMBJ6XZO3XHR7XAQPUWV2KMF5YNS7FL'),\n    ('CADFWSBBD6VMCL45DEPZ37X3JNXOZXIWEVJJTHMQH3UEB3JSQVJSPG2I'),\n    ('CAMXZXXBD7DFBLYLHUW24U4MY37X7SU5XXT5ZVVUBXRXWLAIM7INI7G2'),\n    ('CAMPG46IY3FCD3QEXOFAX4ZGF435HM42L3EOR32PZGNQUZL4OJBGPQCL'),\n    ('CDTBY6MZUQADODPZWRF2TO5RSWOJHZGYJFF4IKSXZUPTGBCQIGI5IVUR'),\n    ('CAAO3AET65WOCC447CWCLAXGL7GHUMOWPT7R6AQB3HHHMDSMBES7XPYX'),\n    ('CBQXETIPKAZ7E3DSYVTPQBQ3VEAYL3OKFONKVYG3B65ATG35HFGHOZUN'),\n    ('CCRXHM2CC5TL6O6M6BDBRJXKS7P4WCU45T6O2AQ6LRTSZ5WSCQWJH7M2'),\n    ('CATBKAYNYV6NWGBMUWL2Q47HWLZGLAINAJCE36G55C4F272O5S5GLV7X'),\n    ('CCGV4T4AJ7BHBHEHVZVIECDW6CO2UQRNMGKLV4SFKFQ6Q2EP7E6OXRER'),\n    ('CBSJUAXXREFNOENLYRURJILAVLFQVCNU6KO4DHPLJQRFIUJZ5FWZ7HS7'),\n    ('CDW2RFU4WFZMVR5XRDE2TRJF7ZCRJG6A6TZQCWTRB473XJSD6G4BK4EK'),\n    ('CAIXIOWEREZF2RN25FDIBUSDB3HTKL4DTIXKDKYWW43RYRRHWJ54DKRR'),\n    ('CD26X7VAM7GGAHYBIZ2DPSNS7TETJPWQEKN5JAWUEBSYMDOUBWRZSJNZ'),\n    ('CA3XYBIUSAX22POJFDFIGTYLNZUGFER6U6Z3PDJ5BO2Z2A2HZEG2X2XU'),\n    ('CACK3FAHXCB7QAJAXBPZ5SE4CN5KCW33AS5UUTRM2TGO2V4O4X4FZ4E6'),\n    ('CCXQACY5KY7JWVK46ZNWPZSFRYOIRJKYRVEWPOF5QTSLJHLJ5B63EV3J'),\n    ('CCS6CMLXD7NBD5L54FGDENKBBSAR3TQSTNZAQVT5JOVV6S7JH3EGXDCG'),\n    ('CDVFMC5KCANFIG2KTNJMFYEAXX22TXU32QCINAAFAXMHDGB3Z2AYNCIE'),\n    ('CBEE5LVXTORYRWW36FIWHOQLJ2E4ZH4IWXYZ7S7LNWU6QPMLDXWM4FDP'),\n    ('CDZYAFNTTKR5V6ZWYUBHSYTYNEMOQZJPJ4VRTWFEMEZO3CPLS62HWRY4'),\n    ('CCC53HEWFLYA4KBYAFHUEJREIZP4SXFJKMB353WFLKOKENNMEVNGUNEZ'),\n    ('CCOOTK5GR3ZTISUEYXU5WANZB335SPOABC5CWIB46YM4FVTFKHKMK7EI'),\n    ('CCZOFUG2QO46RIVGOSCCY7MMDWGT2NQELJICSHLSNWKSZLQI7B2DPMTB'),\n    ('CCOA2AX7JPWRSE5LMJVRXSWLAT3ZFZC6HM2TQ5ZC476K44KYKHNKNEJE'),\n    ('CBT37VUKG4MNN5OG62VEWJHPZK3UM2KMFOKGNMASQUDTX6367KFM2YOI'),\n    ('CCFDZQB5SDHZMEKNSEMTU7G6NY25TRXMUYYLLJ7WYU75YVIC4237VD75'),\n    ('CAJQTUYNDTG5RKOEF4LKX3ZXRNBSZOQEGUYLWLJXXRP7KL6FN5BGUKDH'),\n    ('CC6HJVNKAZPLC55W6CYFMQJGDYRDAWEZV23IWTULCBWNSTKY7KK47BSQ'),\n    ('CC3GYD7YAQHE5JDEQ2AGRZDRGZ4G3STGGQCUVZYHL5ZJUKHYHYVBEMWY'),\n    ('CARZ47CFSYB3DL2OQQAR4KMCS2UNWN23DKXPUGOA6AVPX62M466ZTYSX'),\n    ('CA3TOMCU534RM7KBWTUJCLUALIQDNLZ6OFOCCQOPE4LNCURBIXKBPQQ2'),\n    ('CCL7U7D3CLBFMNNJZB3ZZ4P7FCKETBXM3NTIR73SVIWLUVBKZQNUPD2D'),\n    ('CBP6AYV4ZGRSAF6DEWSFIRZRJEQMXO6IWB2MXODWO6XS5UKFMACKGL2M'),\n    ('CCDPYFKYHWNXCO2RH6PCZF7JU27MNMNS4ETUHERW5VQOMKVL6QXZFSN3'),\n    ('CCXCWYGV6U3FGTTMUH5J6OWWBOK2V3WSQDLBFUWMOCRXXJZS4WUJQSMM'),\n    ('CC2BIHZZZ5T3MXDTSN4BM6USTL32GCPS3REN2U4XS4ZAQGMJC325EHX2'),\n    ('CBDJFETM563453SR2KAW7DUENNRWCJOOGBFQKWEDRIBJXZ6ZHSSIVTZD'),\n    ('CBIUKNYPFT2XNOEM4Z4UY7HNXM3KYOOJ47SFZWD2PBXD3M24L3BFQS7T'),\n    ('CASIKIG4K4TXL767EKCKNDSWPWFRVDMYXAU25PEBKAY3JMGKKLQ26AT5'),\n    ('CATTJU74FVZ3KYRWJSDKODAX7GENKBODCWNPG4VR6MWUOFWWMS7R3L54'),\n    ('CDLCMKIM56QM4WP5JNOB7ZGFTF2OLZ6G3MKREWF6BJ7SBIWWYHYOVGHT'),\n    ('CBGRTO7NN6NJDH6JIHNCDUKJCLT5PFATGECDBMUW4U2IZTTIRCALQ5NG'),\n    ('CDBQ2IPAC26MQWZR3D2IA647IKGS6CMKQJFIVVOQBQYZ32JQXHNKWI57'),\n    ('CCSUZC2PKN5RQC4O6CFZQOIVKRGUTVXHV7MV7XHWR5VBNKC7SCS6JMOJ'),\n    ('CBMSBM6EABGBNZ47WZTLX6WJOB3ETO2GNPQYC2FX6LJXUL7TRQFZ3IA3'),\n    ('CD3QVDHNWWERLSR7RLFGSDORFMG4IGOVGG5EQD7RKPZO675CIRUYAZCM'),\n    ('CBPPA6CMGLINISOAT6PVL5RNC5AGUWKN6U7O6QFCNQVI47ZNQVLCTWDW'),\n    ('CB335M27XHH4S3XKFBH4IHBKQRB5AITZ76P3BULRTAVI2RRBJA3UBGRW'),\n    ('CCQ5ZALBEXY63GBJ5X2J46VT7JUXQZGA3P4RIFUIDRVUWT3QLNGVQGKG'),\n    ('CACX5646BHTJ3CMNDPDTQURAP5REOCUIICJWWQ26DVO3YYYG2UCKKWVY'),\n    ('CBR7Y5SNUIEBWN464BOA6RBVLQHZYEK7R5WYOP7G7M5EDPUVP27UEAJS'),\n    ('CBRGSLZ267SYS2QMQMEKX3I6X5NCFPE5H7O6MOHAJYRNOWNOB5QSNAFV'),\n    ('CCEBH67CQ5HCQIZMLD6T3OJF3HL5WVM2L74Y3T2LPNWSJRSTH3LVUIET'),\n    ('CDNPUXW3QRTKTYA3R2ETPYPX2D3WYJGY2SLOGXTGH7DV2NMVEXFPVIUJ'),\n    ('CCDV4DJ5NCQ7R6KNCFXWLFPZWY55AWL3GLSA6JEMMUDBHQZTZTF5XCUR'),\n    ('CBSGMHDTW5QO2FJMGGJSXMS72GPVSWKWXBIXJRPFWLXSCJ4PA46GGM5S'),\n    ('CDCBYI6IHUWQCYSH5NTFMEPGBTQZEK3KLGRT44GAOOMSRCRDDLFSESVR'),\n    ('CARFAMXG2B7ZGKLPO6NWLYXL5XTCMY4BIHE3BWUAZDSX2YQQEAGG6SCK'),\n    ('CD5T5DVALG45HGQSO3ZDVY25PB3QL37N6JUDOYCXK5CE3AWILW2V7HWO'),\n    ('CA4Z7AMKNYGTPSBU77GLXVARRT6DKGSYPGXY2YZWNGPQ7KQGLLSN7ZXJ'),\n    ('CC6LQAOLO5CJOQG6364QISO7CWJEPSW5B7XRQGQER2KY7WWMA6SMZDYW'),\n    ('CDTSSTLKVVPWJZXVCGJJNGWKH5MY7OMINVXTB7DGFMDJTCCDBCSRG52O'),\n    ('CCINLSVEOXXFDSRF2DISYDCRYXS7UPWEDR6ZUARHJFLFVWWRDOV3EHAY'),\n    ('CC5CUWNMRMUSRLNPQQM3J3SLHJ4IO6EEKKXA7ULSLQKHNXW5PGPK4N3I'),\n    ('CB4KKFCWV25BO3RQQHFJLSGAOBHBLCH3GLPBIOB35D7P3YP4CDHZPVH3'),\n    ('CCB67QNROV4EX7BFNB366HQCBE7Q4ND254HNAOWREEP3WQEL56ALUUBN'),\n    ('CDIFITC5BKGIIXDKNTDS7OFSGCZ7CJQA36JAPVN2LXJTYXCJWNDGS35O'),\n    ('CB6Y3QNAKAI27VAPFYHVKNTHSQWDAN23D6OIDIH2C5YBDPSOWVPDMNPU'),\n    ('CAVLQ2RJXM5SWA4FWRNJAKPT5B3YV3OXFOBEZC3TT6KW5SDE2NEZ6STE'),\n    ('CCKQO6BVE3SR34RTKAODYDCYLN7IJMKXN7D6ANGYRAOLSVVCGH4CMAOT'),\n    ('CAKJXFOVLECSNMDGEGOILWCZJZVDM2MKJFJBITKAABMGN57I3QQPS35M'),\n    ('CB7ELLI7AIJJWNIQA6OYHWXD7SMXUH4GVC5BNHHFSQLTCBGXXOG4ARVW'),\n    ('CDNC5M6TNUBGA72XN4GKT3AIIDEMXN7D4QZQ3PC7U444SIM5ZSPMEQL3'),\n    ('CBVCCH2E47NKTFOQFA2KKPPOMVQPMTP4FIWYJ5WFLW2G3XHE7AS2XX6S'),\n    ('CBIYPMQIQINY4FI4RXUZJ2HVNBRTE4GYQGEATKMERTJJVEMIB5QWAO6X'),\n    ('CCCVPSORZY5N7CU2IENGXDQ5EG4HAX7YLIAMZ4IU2RNVRQSJO5LDB62W'),\n    ('CDJPROL4CVOGTIJ4VBJST67D6SJDPUICASDQFBYD3DB74AR3SE3MAR4V'),\n    ('CA22XCXSINOJTOQGKTLTEUXNKE7Z4IEBO5XNHPX7MRAEPOD3OAJMHY5R'),\n    ('CAHAKWU2DHJL3GMQCDWAY35B5HEBQM2WILVK5C5BI2EBQSAWOCSDYAFH'),\n    ('CCAE4V4CUOGRMISNDQFZECSRZZ5WR4MIOXU3LS5TWGHXKU2XQ25AORDY'),\n    ('CCTDN7QPRBJEWIK36KRT23PJTTP54VB55TJ3ZICQ4GH6GLOOADMWPGPR'),\n    ('CBTR6DGWFTEH4PU45IY6HNRI3QKZQEMG6AWUN5WZ4KISPBOWGILFH6M2'),\n    ('CD5HRIJ7CR55VJZGXEI37DG4VYXQQ6YWYICZZHQIOUREVFQBVDVHMKGJ'),\n    ('CBVKW4FIXHMN2GVVEUNUS776GXSR767ADANKWMB5FK5HS5MCGYMOKAR4'),\n    ('CAHVZ7BDMO4QPQ7KWG4XDA4UJKSZYMRBUQCPV5C3GT7IRWE3DNXECQZX'),\n    ('CDTTGVKXMYPZOVZVWPVBQZJ34L4UBWMKWCT6VXAILOR2JH7JEJZIFNDW'),\n    ('CDBIYK7BL4OQJ6OAWIFI2WQX75GM5V4EHYTBNLS5I6JYLTGAR6ZHOSHD'),\n    ('CCMAKYCJGPWFYCVJXBXC5QLA5QPM3LSZOGG2O7QCQE5KAIPUEJIVVOA2'),\n    ('CAZ43KEJHOG4F5ARGNMS6UGMU5UCTHC6BNBEJ4UXN5ZR5M6BPQVTTJKK'),\n    ('CD6A62JGCAX3Y375VJFQCPI3LFA3Z3DM4A6NQRJVE5UGKOGVNR74QUML'),\n    ('CDVJBTSEA2AQSZKCI24NM27HX6OT57YNZDC4SQVQX7IT2AYWNWGSR4R5'),\n    ('CCBAK2F36ARUZ36WUGFI6NU5LQAYO67IN3I5QTB2V42DI42YYRIKWXEK'),\n    ('CCZCKFDGQ36M4SWE6AMNZPSNJ7G4DHCLB5LKN3ONM622AWUFXQTXVQH4'),\n    ('CAOG4YU55SMFTHP2XUZULHV37SLPKQGWY6BOJP5A7UEKL2VIM4T3Z62G'),\n    ('CDK4YEK25CA6T43K6NBKJCRZH2QEHTTTCDVI6QRMEBD5B5OJ66CUQ26J'),\n    ('CDCDQUQH2Y2CYUBPCM4ZE6SV4XSUKT3QZV7DGT3VIABCSBITVQIMVPSJ'),\n    ('CCAX4TWIUM4P3K7ITHW5BSLRXC6NOBXLHSWBDY3NE7F6QA2QMSLUG7GS'),\n    ('CAYZAMECTKHMNCK2CZYRJZIK4NG4W46FU5TKFBM5OZ5YTEQAWMUGTRHK'),\n    ('CAOSHLX34QI7ZGKHJJRQH7N5KRF7WTZNMKLYHS67FK7U76EJ4UGP2U4Y'),\n    ('CCRDMKXCM3F7I4SRA6PAICMFOY3MIR67U5QMZFW2EGHAXYYN2NI7USH4'),\n    ('CAFZJZZ7ITZHUGNHC5YSOS47LR66JS64G7TQW43JN4IMDG5KZC4VA3DW'),\n    ('CC6WOGTWGZERQVJRT45XST76QYGD3YICUWDNYW3K3AD5ONARQQW2N7XP'),\n    ('CCCDPF74BFBIHCBWCA3QX5R2UULH4VSJFOK6KL44KDKJS75ZKJJYUSPH'),\n    ('CBMOEJUOKI72AXRPEQCRYSWDUBMI2LZEYVFJUTB256FO3WYSYSZI5F5A'),\n    ('CBVDERGK2SMEO3PUYIU4RDJIQ4XYEY4OFBAXC7DWFU67JS2V3N2ESSCP'),\n    ('CDS3WIIQZJJHIUPL6BP5K4TP5WD74LU4CKHDIYIHWZHJJRAKPHV42GRE'),\n    ('CCV2X5THRWCT7HCGJU42DMOVYLAARVIPEDG2LQOVVA2WGONF2MZY2OX6'),\n    ('CA4HTZNY2RBZWEQE5GBMNREZMFRPAZSVJ6OGPC7T3VM7NHRJYFAVID2S'),\n    ('CBBMQBNHB2FYVZYV7VNHOJHUMTFJLR4PUMRVQYNW6RHIKZO2NQMIBUCV'),\n    ('CDTSE6RLRI7ZO25JSER6E4SQR4PHJJNONEGS5HDJ3Y6LAKECRZKYN5CA'),\n    ('CBRUQ7I6C6OGHMDYWD6XQUZFB6KJ3LLPNE34EPKSPFZ2YMBJ2GIWYYZ7'),\n    ('CDPL6QRE7T5XXICU2KJEUL366KEZT6ICOVBLSL46MHMC5RSDIBR2PCTO'),\n    ('CADMDTCQHSC2GCYPDCYQ7FBYVOXED3E3WGCYJHHT524ZBALM7VYHFS7F'),\n    ('CAAJYIESEIKI7KZV67MBSXPCRGKH5WY354WUS55H4UNBD35OSKYPZA7Q'),\n    ('CBWWCFZUIYARXP2VFQKB6TGD63IV6PC5GO4AO6PNP3HGZWHT23FTHMGC'),\n    ('CCZXH6N6DSJLAMXCYODGD255GTFILMNU4R5AHPE7PED4A4EZEOPYAWL5'),\n    ('CBV6LZABOAJRXHLIEKILTWBPC2AXLYVR4CGGPKZQ3PWJ5QFTPIWSWGWQ'),\n    ('CAPIOQNULTKVYOJT6X2W2XKGNIVUWZDY72Y42YG6HQKJ7DU7YTHIDQYX'),\n    ('CDYLKM3DGH5A6QA6QOIITPKG7C4DTZMS2HF75XURORACBHCR6AOE3K33'),\n    ('CC7IGNJ4CDAKZPOZJCTTWGAVKTQXKYQGUSVJ5CDUPES3QULCQW6UNAH5'),\n    ('CCX7MKVYN5LZENM53VJOQT7ZE477RAIE3FIKEP76OHEWGNKC5TSCXUL2'),\n    ('CCPN4NNSQKL3LLPTSPTFKYKXR3FBL37AULE6PTZH3QD24MPHXQCN5O3U'),\n    ('CAT65JSA4B3AK7SIUWB5ZONZALAS2HGMFG7EF5GP7BIOKJP6Y4O6J5BF'),\n    ('CB665SVTHHKPYX4LUSTYUG5T22WMDETNWWKXRDES3I74NADZG6SIBP5F'),\n    ('CCVWACSSUYADCHYEYUCKUQL4YISMLLFFXY56UHCVIYR6D6P77RCRGQY7'),\n    ('CDE53ZA37BXC3RA4J4CX2ZRCJ3B4DKXK7VCVK3OMDBBIIBZASTVQQM5L'),\n    ('CCC466Y3A5332PRE7NQOKOLJXDHF5CNS2M5MT7I7YIPNKLUO4YETIE3B'),\n    ('CAXYSVTPAU6JLPI7V6XJWLFWIYMFIHHFF7D7QCFH2YB2Z4BSI3BCGGH4'),\n    ('CB2I6JGVCWBGXQ4WAJOQQEAKEXXPURL4E2BPEW4NKVTUYYK7VPTDDTMN'),\n    ('CD3XIX65YUNZTEWOBPFWTTJE6TXDXLXE5THMW3HYBZXCQU4TWK2DUKWL'),\n    ('CDM3E67MHCLMFXRDJWOIZRRYPKENH7CMARTOQBEZQQZVLQV52RVPMINA'),\n    ('CAWR3CM74VNXM5MRIPILDSTW5S4ZNB47DYBEVE6565UC573L7OFZF7FH'),\n    ('CCYMZTOJIDZY45XGDBUNRMYUZWBUTNWOAMREAW4JYU7GEKDHLOEOJX25'),\n    ('CDBIGH3UEIVPVU7I2PGJV3IFIAN6OIPZ3QW7EDOO6LAHYBWW4MVS75Z2'),\n    ('CBMWU3574VFWNBNMNYAAH4OBT7DPB27URDW4BWIV7XAPQG6YYMJW2LSH'),\n    ('CCKQASCNLYGCUYRKDFYHW5SRVUQNRPRX27YAK62CBNLEVSKIXE3CO4LI'),\n    ('CDQ4OYM3RPLEWNZFVAJQGEYLSDMPHEZYMHVOQBKI767UWV5XV5ISAJE2'),\n    ('CDINXPGR3BJCPBC7IQQIL5AEHAVDZZSIGNCWJ7ORPVBRCL6L5RJ3FDQM'),\n    ('CC642QYWXXR2HUZDNJ6KYN5LV5JFPFPT4Q6YNKLZLYEFWZZZ5SJYLA5G'),\n    ('CDRRS2SLIP7THFGUZVB4QL2RAM2ZHSDMAD2GL5GEXTKK5AY3DQUX3Y7N'),\n    ('CA5H37TMUGNSUS4KP7UV5EB4UMEPZV6MILEEKROP3K47SLA5SV45FCIP'),\n    ('CA4HVQTVHQWDIZSQQQBXYHCA4C5D6V2ZGRHJQIKHVDMBEXCMFH4NYURR'),\n    ('CDL5H2BZTIPBPIKJ2NOILZQYZRZE553H3SZX47DDBYEBXSWXIHZLGA2C'),\n    ('CCJHUCHZ2DC6MP7LMGQJYSENNTGIFWU4J4TCGFYYDLAC5LTD4YMF6HSQ'),\n    ('CD74JDJIRBMCKPI5LV5C4A7L4NIPCLJ3VOVYILFFXF3TSTALPOLY7CHC'),\n    ('CB3ZWHICKIYJOSQ7W2GFN2U2CVSGTFBQ6GCDVGQ354BQYJCKX6L22CNH'),\n    ('CDQUZBIS7TFV64ZTX22RQV224QPBJZ2BNJB5J67A3KMFY3ONFHVNNS3D'),\n    ('CDQ223FWK2XEEYXNNJQS4JCQ5DUCPXKJNNDNRJ3RON5LXH43UO7ECWUY'),\n    ('CAJAQRYP5NQKLK6DJNTI4AVH3MXL3GYU7LYKT7JWMMRD7PFNF64RV6BM'),\n    ('CDFHPTKLKA7GBLGVWXVUUVGFMXZJCP2ABQXINCC6WTO2KNDFDY4WXQRU'),\n    ('CALCNPWBGQOPFTY3BSAZKAGI3MXEHZZ7VOMSMTX3ISYWBTFNGGFQVK5O')) AS v(contract_id)),\nev AS (\n  SELECT DISTINCT he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash, he.topics_decoded\n  FROM stellar.history_contract_events he\n  WHERE he.closed_at_date >= DATE '2026-06-01' AND he.closed_at_date < DATE '2026-09-19'\n    AND he.contract_id IN (SELECT contract_id FROM routers UNION ALL SELECT contract_id FROM pools)\n    AND he.type_string = 'ContractEventTypeContract'\n    AND he.successful = TRUE AND he.in_successful_contract_call = TRUE\n    AND json_extract_scalar(he.topics_decoded, '$[0].symbol') IN ('swap', 'deposit', 'withdraw', 'claim',\n        'trade', 'deposit_liquidity', 'withdraw_liquidity', 'claim_reward', 'position_update')\n), tagged AS (\n  SELECT e.*, json_extract_scalar(e.topics_decoded, '$[0].symbol') AS action,\n         e.contract_id IN (SELECT contract_id FROM routers) AS is_router\n  FROM ev e\n), routed AS (\n  SELECT DISTINCT tx_hash FROM tagged WHERE is_router\n), lp_direct AS (\n  SELECT DISTINCT tx_hash, closed_at FROM tagged\n  WHERE NOT is_router AND action IN ('deposit_liquidity', 'withdraw_liquidity')\n    AND tx_hash NOT IN (SELECT tx_hash FROM routed)\n), tx AS (\n  SELECT t.id, lower(to_hex(t.transaction_hash)) AS tx_hash\n  FROM stellar.history_transactions t\n  WHERE t.closed_at_date >= DATE '2026-06-01' AND t.closed_at_date < DATE '2026-09-19' AND t.successful = TRUE\n    AND lower(to_hex(t.transaction_hash)) IN (SELECT tx_hash FROM lp_direct)\n), signer AS (\n  SELECT tx.tx_hash, MIN(o.source_account) AS source_account\n  FROM stellar.history_operations o JOIN tx ON tx.id = o.transaction_id\n  WHERE o.closed_at_date >= DATE '2026-06-01' AND o.closed_at_date < DATE '2026-09-19' AND o.type_string = 'invoke_host_function'\n  GROUP BY 1\n)\nSELECT 'aquarius' AS protocol, closed_at, user_address, role FROM (\n  SELECT closed_at, json_extract_scalar(topics_decoded, '$[2].address') AS user_address,\n         CASE action WHEN 'swap' THEN 'swapper' WHEN 'claim' THEN 'claimer' ELSE 'lp' END AS role\n  FROM tagged WHERE is_router AND action IN ('swap', 'deposit', 'withdraw', 'claim')\n  UNION ALL\n  -- Direct pool trades: topics[3] is the caller (the router itself when routed, so excluded).\n  SELECT closed_at, json_extract_scalar(topics_decoded, '$[3].address'), 'swapper'\n  FROM tagged WHERE NOT is_router AND action = 'trade'\n    AND json_extract_scalar(topics_decoded, '$[3].address') NOT IN (SELECT contract_id FROM routers)\n  UNION ALL\n  SELECT closed_at, json_extract_scalar(topics_decoded, '$[2].address'), 'claimer'\n  FROM tagged WHERE NOT is_router AND action = 'claim_reward'\n  UNION ALL\n  SELECT closed_at, json_extract_scalar(topics_decoded, '$[1].address'), 'lp'\n  FROM tagged WHERE NOT is_router AND action = 'position_update'\n  UNION ALL\n  SELECT d.closed_at, s.source_account, 'lp' FROM lp_direct d JOIN signer s ON s.tx_hash = d.tx_hash\n)\n), users AS (\n  SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date,\n         user_address, role, MAX(closed_at) AS last_activity_at\n  FROM source\n  WHERE regexp_like(user_address, '^[GC][A-Z2-7]{55}$') AND role IS NOT NULL\n  GROUP BY 1, 2, 3, 4\n)\nSELECT protocol, activity_date, user_address, role, last_activity_at,\n       'activity' AS row_kind, DATE '2026-06-01' AS covered_from, DATE '2026-09-19' AS covered_until,\n       CURRENT_TIMESTAMP AS refreshed_at, 'history' AS source_layer\nFROM users\nUNION ALL\nSELECT 'aquarius', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),\n       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-06-01', DATE '2026-09-19', CURRENT_TIMESTAMP, 'history'\n",
+      "matview": "dune.paltalabs.result_scf_aquarius_users_history",
+      "cron": null,
+      "file": "queries/pilot/8797138_aquarius_users_history.sql",
+      "pending_execution": "01M32GE1BX6RB55B5AEC4NW8MW",
+      "last_execution": "01M32GE1BX6RB55B5AEC4NW8MW",
+      "credits": 181.426,
+      "rows": 25700
+    },
+    "chart_ecosystem_weekly": {
+      "query_id": 8797598,
+      "sql": "-- Chart source: unique addresses across all six protocols, complete calendar weeks.\nSELECT CAST(date_trunc('week', activity_date) AS DATE) AS period_start,\n       COUNT(DISTINCT user_address) AS active_addresses,\n       COUNT(DISTINCT CASE WHEN user_address LIKE 'G%' THEN user_address END) AS g_addresses,\n       COUNT(DISTINCT CASE WHEN user_address LIKE 'C%' THEN user_address END) AS c_addresses\nFROM dune.paltalabs.result_scf_users\nWHERE row_kind = 'activity' AND activity_date >= DATE '2026-06-01'\n  AND activity_date < CAST(date_trunc('week', CURRENT_DATE) AS DATE)\nGROUP BY 1\nORDER BY 1\n",
+      "matview": null,
+      "cron": null,
+      "file": "queries/pilot/8797598_chart_ecosystem_weekly.sql",
+      "pending_execution": "01M32KT8Q47VRD19D3H0RR4GNM",
+      "last_execution": "01M32KT8Q47VRD19D3H0RR4GNM",
+      "credits": 0.009,
+      "rows": 16
+    },
+    "chart_ecosystem_monthly": {
+      "query_id": 8797599,
+      "sql": "-- Chart source: unique addresses across all six protocols, complete calendar months.\nSELECT CAST(date_trunc('month', activity_date) AS DATE) AS period_start,\n       COUNT(DISTINCT user_address) AS active_addresses,\n       COUNT(DISTINCT CASE WHEN user_address LIKE 'G%' THEN user_address END) AS g_addresses,\n       COUNT(DISTINCT CASE WHEN user_address LIKE 'C%' THEN user_address END) AS c_addresses\nFROM dune.paltalabs.result_scf_users\nWHERE row_kind = 'activity' AND activity_date >= DATE '2026-06-01'\n  AND activity_date < CAST(date_trunc('month', CURRENT_DATE) AS DATE)\nGROUP BY 1\nORDER BY 1\n",
+      "matview": null,
+      "cron": null,
+      "file": "queries/pilot/8797599_chart_ecosystem_monthly.sql",
+      "pending_execution": "01M32KTD3AEZ7DWXNK7B819N1W",
+      "last_execution": "01M32KTD3AEZ7DWXNK7B819N1W",
+      "credits": 0.005,
+      "rows": 3
     }
   },
   "executions": [
@@ -999,6 +1087,414 @@
       "credits": 0.011,
       "state": "COMPLETED",
       "note": "temp SELECT on result_scf_users, review 2026-09-21"
+    },
+    {
+      "key": "verify_blend_lenders",
+      "query_id": 8797077,
+      "execution_id": "01M32G1F6H53FTXKX1Y69YYE49",
+      "credits": 0.022,
+      "state": "COMPLETED",
+      "note": "temp probe, review 2026-09-21"
+    },
+    {
+      "key": "verify_fxdao",
+      "query_id": 8797079,
+      "execution_id": "01M32G1J1SEG5PNXC0SF63J68M",
+      "credits": 7.563,
+      "state": "COMPLETED",
+      "note": "temp probe, review 2026-09-21"
+    },
+    {
+      "key": "verify_aquarius",
+      "query_id": 8797094,
+      "execution_id": "01M32G43EWZ2MABN2Y8NRJXTN8",
+      "credits": 1.386,
+      "state": "COMPLETED",
+      "note": "temp probe, review 2026-09-21"
+    },
+    {
+      "key": "sample_aquarius_pools",
+      "query_id": 8797100,
+      "execution_id": "01M32G7C50D6VZ5J2AWNZ02MVM",
+      "credits": 0.315,
+      "state": "COMPLETED",
+      "note": "temp probe, review 2026-09-21"
+    },
+    {
+      "key": "etherfuse_users_history",
+      "execution_id": "01M32GCNVE64FPXEV9M295TNH1",
+      "credits": 1.17,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.17"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "fxdao_users_history",
+      "execution_id": "01M32GCWCZJEP51JFC53MQ1Q2V",
+      "credits": 1.025,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.025"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "blend_users_history",
+      "execution_id": "01M32GD0W14CDFPG8NDAF2CTZ7",
+      "credits": 1.065,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.065"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "soroswap_users_history",
+      "execution_id": "01M32GD6Z58WEVKW17X0479EKJ",
+      "credits": 1.77,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.77"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "phoenix_users_history",
+      "execution_id": "01M32GDK1BM4Z1SD4QHJDCRQ83",
+      "credits": 1.025,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.025"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "aquarius_users_history",
+      "execution_id": "01M32GE1BX6RB55B5AEC4NW8MW",
+      "credits": 181.426,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "181.426"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "fxdao_users_live",
+      "execution_id": "01M32KKDTN1EGM0PBWWWKQ1C7R",
+      "credits": 1.025,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.025"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "etherfuse_users_live",
+      "execution_id": "01M32KKMQD8882PW3CHQBZHVSB",
+      "credits": 2.252,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "2.252"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "soroswap_users_live",
+      "execution_id": "01M32KM1ECB3MEYARZ7JMTR0C7",
+      "credits": 2.139,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "2.139"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "phoenix_users_live",
+      "execution_id": "01M32KMSXZZBX9EN2PTPFQQFEJ",
+      "credits": 3.946,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "3.946"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "blend_users_live",
+      "execution_id": "01M32KNCQ6HNS5XF8Y7Z7NKQAC",
+      "credits": 1.567,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.567"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "aquarius_users_live",
+      "execution_id": "01M32KNSV51K0W45ASBSFJ2AZR",
+      "credits": 7.885,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "7.885"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "users",
+      "execution_id": "01M32KQD3JEQYZN25T4YBV0HXB",
+      "credits": 1.059,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.059"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "users_weekly",
+      "execution_id": "01M32KQK5XQ5Q67J46XQNMKVXW",
+      "credits": 1.046,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.046"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "users_monthly",
+      "execution_id": "01M32KQS769QBHD8HE5D9HY7A7",
+      "credits": 1.748,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.748"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "users_roles_weekly",
+      "execution_id": "01M32KR71Q92G90Z083WNA1APY",
+      "credits": 1.038,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.038"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "users_roles_monthly",
+      "execution_id": "01M32KRD2H9ZFS3KFNWAG29Y80",
+      "credits": 1.029,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.029"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "users_health",
+      "execution_id": "01M32KRKBXR861DX9JD0DPFRF7",
+      "credits": 1.027,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.027"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "users_validation",
+      "execution_id": "01M32KRTAVPJRJARGKRC3XVTHT",
+      "credits": 2.822,
+      "metadata": {
+        "columns": [
+          {
+            "name": "rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "2.822"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "read_validation",
+      "query_id": 8796668,
+      "execution_id": "01M32KSSQ05Y279RM2PD0R4TCQ",
+      "credits": 0.029,
+      "state": "COMPLETED",
+      "note": "temp SELECT, Fase 0 2026-09-21"
+    },
+    {
+      "key": "read_health",
+      "query_id": 8796669,
+      "execution_id": "01M32KSVDAXNF8VTWTDYX3R5H4",
+      "credits": 0.035,
+      "state": "COMPLETED",
+      "note": "temp SELECT, Fase 0 2026-09-21"
+    },
+    {
+      "key": "chart_ecosystem_weekly",
+      "execution_id": "01M32KT8Q47VRD19D3H0RR4GNM",
+      "credits": 0.009,
+      "metadata": {
+        "columns": [
+          {
+            "name": "period_start",
+            "type": "date"
+          },
+          {
+            "name": "active_addresses",
+            "type": "bigint"
+          },
+          {
+            "name": "g_addresses",
+            "type": "bigint"
+          },
+          {
+            "name": "c_addresses",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 16,
+        "executionCostCredits": "0.009"
+      },
+      "state": "COMPLETED"
+    },
+    {
+      "key": "chart_ecosystem_monthly",
+      "execution_id": "01M32KTD3AEZ7DWXNK7B819N1W",
+      "credits": 0.005,
+      "metadata": {
+        "columns": [
+          {
+            "name": "period_start",
+            "type": "date"
+          },
+          {
+            "name": "active_addresses",
+            "type": "bigint"
+          },
+          {
+            "name": "g_addresses",
+            "type": "bigint"
+          },
+          {
+            "name": "c_addresses",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 3,
+        "executionCostCredits": "0.005"
+      },
+      "state": "COMPLETED"
     }
   ],
   "visualizations": {
@@ -1389,6 +1885,84 @@
           }
         ]
       }
+    },
+    "ecosystem_weekly": {
+      "visualization_id": 12827594,
+      "query_id": 8797598,
+      "name": "WAU: unique active addresses across all six protocols",
+      "chart_type": "line",
+      "url": "https://dune.com/embeds/8797598/12827594",
+      "config": {
+        "chart_type": "line",
+        "x_axis": {
+          "column": "period_start",
+          "title": "Week (UTC)"
+        },
+        "y_axes": {
+          "left": {
+            "label_format": "0,0",
+            "title": "Addresses",
+            "series": [
+              {
+                "column": "active_addresses",
+                "title": "All addresses (unique)"
+              },
+              {
+                "column": "g_addresses",
+                "title": "Accounts (G)"
+              },
+              {
+                "column": "c_addresses",
+                "title": "Contracts / smart wallets (C)"
+              }
+            ]
+          },
+          "right_enabled": false,
+          "right_label_format": "",
+          "right_series": []
+        },
+        "enable_legend": true,
+        "stacked": false
+      }
+    },
+    "ecosystem_monthly": {
+      "visualization_id": 12827595,
+      "query_id": 8797599,
+      "name": "MAU: unique active addresses across all six protocols",
+      "chart_type": "column",
+      "url": "https://dune.com/embeds/8797599/12827595",
+      "config": {
+        "chart_type": "column",
+        "x_axis": {
+          "column": "period_start",
+          "title": "Month (UTC)"
+        },
+        "y_axes": {
+          "left": {
+            "label_format": "0,0",
+            "title": "Addresses",
+            "series": [
+              {
+                "column": "active_addresses",
+                "title": "All addresses (unique)"
+              },
+              {
+                "column": "g_addresses",
+                "title": "Accounts (G)"
+              },
+              {
+                "column": "c_addresses",
+                "title": "Contracts / smart wallets (C)"
+              }
+            ]
+          },
+          "right_enabled": false,
+          "right_label_format": "",
+          "right_series": []
+        },
+        "enable_legend": true,
+        "stacked": false
+      }
     }
   },
   "initial_usage": {
@@ -1410,7 +1984,7 @@
     "paramWidgets": []
   },
   "dashboard_proposal": {
-    "status": "applied 2026-09-21, dashboard still private",
+    "status": "applied 2026-09-21 + ecosystem row, still private",
     "existing_widgets_kept": "none existed",
     "update_request": {
       "dashboardId": 220644,
@@ -1530,7 +2104,7 @@
     "dashboardUrl": "https://dune.com/paltalabs/stellar-defi",
     "visualizationWidgets": [
       {
-        "widgetId": 2461996,
+        "widgetId": 2462773,
         "visualizationId": 12826621,
         "position": {
           "col": 0,
@@ -1540,81 +2114,101 @@
         }
       },
       {
-        "widgetId": 2461997,
+        "widgetId": 2462774,
         "visualizationId": 12826611,
         "position": {
           "col": 0,
-          "row": 13,
+          "row": 23,
           "sizeX": 3,
           "sizeY": 8
         }
       },
       {
-        "widgetId": 2461998,
+        "widgetId": 2462775,
         "visualizationId": 12826616,
         "position": {
           "col": 3,
-          "row": 13,
+          "row": 23,
           "sizeX": 3,
           "sizeY": 8
         }
       },
       {
-        "widgetId": 2461999,
+        "widgetId": 2462776,
         "visualizationId": 12826612,
         "position": {
           "col": 0,
-          "row": 21,
+          "row": 31,
           "sizeX": 3,
           "sizeY": 8
         }
       },
       {
-        "widgetId": 2462000,
+        "widgetId": 2462777,
         "visualizationId": 12826617,
         "position": {
           "col": 3,
-          "row": 21,
+          "row": 31,
           "sizeX": 3,
           "sizeY": 8
         }
       },
       {
-        "widgetId": 2462001,
+        "widgetId": 2462778,
         "visualizationId": 12826613,
         "position": {
           "col": 0,
-          "row": 29,
+          "row": 39,
           "sizeX": 3,
           "sizeY": 8
         }
       },
       {
-        "widgetId": 2462002,
+        "widgetId": 2462779,
         "visualizationId": 12826619,
         "position": {
           "col": 3,
-          "row": 29,
+          "row": 39,
           "sizeX": 3,
           "sizeY": 8
         }
       },
       {
-        "widgetId": 2462003,
+        "widgetId": 2462780,
         "visualizationId": 12826614,
         "position": {
           "col": 0,
-          "row": 37,
+          "row": 47,
           "sizeX": 3,
           "sizeY": 8
         }
       },
       {
-        "widgetId": 2462004,
+        "widgetId": 2462781,
         "visualizationId": 12826620,
         "position": {
           "col": 3,
-          "row": 37,
+          "row": 47,
+          "sizeX": 3,
+          "sizeY": 8
+        }
+      },
+      {
+        "widgetId": 2462782,
+        "visualizationId": 12827594,
+        "position": {
+          "col": 0,
+          "row": 15,
+          "sizeX": 3,
+          "sizeY": 8
+        }
+      },
+      {
+        "widgetId": 2462783,
+        "visualizationId": 12827595,
+        "position": {
+          "col": 3,
+          "row": 15,
           "sizeX": 3,
           "sizeY": 8
         }
@@ -1622,8 +2216,8 @@
     ],
     "textWidgets": [
       {
-        "widgetId": 2461994,
-        "text": "# Stellar DeFi: active users\nWeekly and monthly active **addresses** for Blend, Aquarius, Soroswap, Phoenix, FxDAO and Etherfuse on Stellar. Funded by SCF #35, built by PaltaLabs.\n\n**Methodology.** An address is active in a period if it signs or is the beneficiary of at least one protocol action (swap, liquidity add/remove, supply, borrow, repay, liquidation, backstop, redeem). Both classic accounts (G...) and smart wallets / contracts (C...) are counted, because smart wallets are real users on Soroban; contract addresses are shown separately where relevant. Periods are calendar weeks (Monday) and months in UTC; only complete periods are charted. *New* means first seen in the covered history of that protocol, not account creation. Role charts count unique addresses across protocols; the new vs returning charts add protocol-address pairs.\n\nData refreshes once per day from Dune materialized views. SQL, data model and runbook: [github.com/paltalabs/stellar-defi-dune-dashboard](https://github.com/paltalabs/stellar-defi-dune-dashboard).",
+        "widgetId": 2462771,
+        "text": "# Stellar DeFi: active users\nWeekly and monthly active **addresses** for Blend, Aquarius, Soroswap, Phoenix, FxDAO and Etherfuse on Stellar. Funded by SCF #35, built by PaltaLabs.\n\n**Methodology.** An address is active in a period if it signs or is the beneficiary of at least one protocol action (swap, liquidity add/remove, supply, borrow, repay, liquidation, backstop, redeem). Both classic accounts (G...) and smart wallets / contracts (C...) are counted, because smart wallets are real users on Soroban; contract addresses are shown separately where relevant. Periods are calendar weeks (Monday) and months in UTC; only complete periods are charted. *New* means first seen in the covered history of that protocol, not account creation. The ecosystem and role charts count unique addresses across protocols; the new vs returning charts add protocol-address pairs.\n\nData refreshes once per day from Dune materialized views. SQL, data model and runbook: [github.com/paltalabs/stellar-defi-dune-dashboard](https://github.com/paltalabs/stellar-defi-dune-dashboard).",
         "position": {
           "col": 0,
           "row": 0,
@@ -1632,16 +2226,24 @@
         }
       },
       {
-        "widgetId": 2461995,
-        "text": "**Partial coverage.** Etherfuse is covered since 2024-02-01. The other five protocols are covered since 2026-06-01 while their historical archives are pending, so June 2026 overstates *new* addresses for them and growth rates start in July. FxDAO has almost no activity in this window. Trading volume and USD metrics are out of scope for this release.",
+        "widgetId": 2462772,
+        "text": "**Partial coverage.** Etherfuse is covered since 2024-02-01. The other five protocols are covered since 2026-06-01 while their historical archives are pending, so June 2026 overstates *new* addresses for them and growth rates start in July. FxDAO had a single active address in this window (verified: no vault calls and no USDx/EURx/GBPx/FXG mints since June).\n\n**How to read it.** Etherfuse is a classic Stellar asset issuer: its users include SDEX traders of the stablebonds (market-making bots among them) and holders who transfer them, besides minters and redeemers. Blend lenders are most of the total; 68% of them were active on a single day. Aquarius counts router and direct pool activity; for direct liquidity deposits, which carry no user in the event, the transaction signer is used. Trading volume and USD metrics are out of scope for this release.",
         "position": {
           "col": 0,
           "row": 11,
           "sizeX": 6,
-          "sizeY": 2
+          "sizeY": 4
         }
       }
     ],
     "paramWidgets": []
-  }
+  },
+  "cap_history": [
+    {
+      "date": "2026-09-21",
+      "from": 500,
+      "to": 600,
+      "reason": "Usuario aprobó opción A (~40 cr) tras exceso de Aquarius history 181,4 cr; cada ejecución >80 cr requiere pregunta previa"
+    }
+  ]
 }

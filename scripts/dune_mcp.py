@@ -87,19 +87,32 @@ class DuneMCP:
         return message.get('result', {})
 
     def call(self, name, arguments):
+        if name == 'getDuneQuery':
+            # Read-only. The MCP answered getDuneQuery with empty bodies or hung on 2026-09-21;
+            # the REST endpoint works with the same key, so it goes first.
+            try:
+                return self._rest_query(arguments['query_id'])
+            except urllib.error.URLError:
+                result = self._call(name, arguments)
+                if not result.get('query'):
+                    raise RuntimeError('getDuneQuery sin SQL')
+                return result
+        return self._call(name, arguments)
+
+    def _rest_query(self, query_id):
+        request = urllib.request.Request(f'https://api.dune.com/api/v1/query/{query_id}',
+                                         headers={'X-DUNE-API-KEY': self.headers['X-DUNE-API-KEY']})
+        with urllib.request.urlopen(request, timeout=60) as response:
+            remote = json.load(response)
+        remote['query'] = remote['query_sql']
+        return remote
+
+    def _call(self, name, arguments):
         try:
             result = self.rpc('tools/call', {'name': name, 'arguments': arguments})
         except http.client.IncompleteRead:
-            if name != 'getDuneQuery':
-                raise
-            # Read-only fallback. Never retry a mutation after an ambiguous transport failure.
-            request = urllib.request.Request(
-                f"https://api.dune.com/api/v1/query/{arguments['query_id']}",
-                headers={'X-DUNE-API-KEY': self.headers['X-DUNE-API-KEY']})
-            with urllib.request.urlopen(request, timeout=60) as response:
-                remote = json.load(response)
-            remote['query'] = remote['query_sql']
-            return remote
+            # Never retry a mutation after an ambiguous transport failure.
+            raise
         if result.get('isError'):
             raise RuntimeError(json.dumps(result.get('content')))
         if 'structuredContent' in result:

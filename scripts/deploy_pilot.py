@@ -70,7 +70,9 @@ def mirror(key, piece):
 def finish(client, state, key, execution_id):
     result = client.call('getExecutionResults', {'executionId': execution_id, 'timeout': 240, 'limit': 20})
     print(json.dumps({'key': key, 'execution': result}), flush=True)
-    (Path('/tmp/opencode') / f'scf-{key}-execution.json').write_text(json.dumps(result, indent=2))
+    logs = ROOT / 'logs'
+    logs.mkdir(exist_ok=True)
+    (logs / f'scf-{key}-execution.json').write_text(json.dumps(result, indent=2))
     meta = result.get('resultMetadata') or {}
     cost = float(meta['executionCostCredits']) if meta.get('executionCostCredits') is not None else None
     row_count = meta.get('totalRowCount')
@@ -99,9 +101,10 @@ def run(client, state, key, piece, matview=None, cron=None):
         result = client.call('createMaterializedView', {'query_id': piece['query_id'],
                    'name': matview, 'performance': 'medium', 'cron_expression': cron})
         piece.update(matview='dune.paltalabs.' + matview, cron=cron)
+    elif matview:
+        # Existing matview: refresh re-executes the (already synced) query and rewrites the table.
+        result = client.call('refreshMaterializedView', {'name': piece['matview'], 'performance': 'medium'})
     else:
-        if matview:
-            raise RuntimeError('La matview ya existe; usar refresh explícito tras revisar su estado')
         result = client.call('executeQueryById', {'query_id': piece['query_id'], 'performance': 'medium'})
     print(json.dumps({'started': key, 'result': result}), flush=True)
     execution_id = result.get('execution_id') or result.get('executionId')
@@ -114,8 +117,9 @@ def run(client, state, key, piece, matview=None, cron=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', choices=['inspect', 'probe', 'archive', 'live', 'metric', 'chart', 'refresh-charts', 'finish'])
+    parser.add_argument('command', choices=['inspect', 'probe', 'archive', 'live', 'metric', 'chart', 'refresh-charts', 'history', 'history-incremental', 'set-cron', 'finish'])
     parser.add_argument('target', nargs='?')
+    parser.add_argument('cron', nargs='?')
     args = parser.parse_args()
     client, state = DuneMCP(), load()
     if args.command == 'inspect':
@@ -145,6 +149,28 @@ def main():
             if float(meta.get('executionCostCredits') or 0) > 80:
                 raise RuntimeError('La ejecución superó 80 créditos; revisar antes de continuar')
         return
+    if args.command == 'set-cron':
+        piece = state['pieces'][args.target]
+        cron = None if args.cron in (None, 'none') else args.cron
+        result = client.call('updateMaterializedView', {'query_id': piece['query_id'], 'performance': 'medium',
+                                                        'cron_expression': cron})
+        piece['cron'] = cron
+        mirror(args.target, piece)
+        save(state)
+        print(json.dumps({'set_cron': args.target, 'cron': cron, 'result': result}), flush=True)
+        return
+    if args.command in ('history', 'history-incremental'):
+        key = args.target + '_users_history'
+        if args.command == 'history':
+            if key in state['pieces']:
+                raise RuntimeError('History ya existe; usar history-incremental')
+            sql = pilot_sql.history_bootstrap(args.target)
+        else:
+            sql = pilot_sql.history_incremental(args.target)
+        piece = sync_query(client, state, key, sql, 'SCF35 · ' + args.target.title() + ' users history')
+        # Bootstrap without cron; the daily cron is set only after the incremental SQL works.
+        run(client, state, key, piece, 'result_scf_' + key, piece.get('cron'))
+        return
     if args.command == 'finish':
         finish(client, state, args.target, state['pieces'][args.target]['pending_execution'])
         return
@@ -166,7 +192,8 @@ FROM source GROUP BY 1,2,3 ORDER BY 1,2,3"""
         key = args.target + '_users_' + args.command
         sql = pilot_sql.daily_users(args.target, args.command)
         piece = sync_query(client, state, key, sql, 'SCF35 · ' + args.target.title() + ' users ' + args.command)
-        cron = '0 1 * * 0' if args.command == 'archive' else '0 5 * * *'
+        # Archive: one-time build, no cron (paused 2026-09-21; the history layer replaces it).
+        cron = None if args.command == 'archive' else '0 5 * * *'
         run(client, state, key, piece, 'result_scf_' + key, cron)
     elif args.command == 'chart':
         # Plain query over matviews, no matview of its own. Refresh mechanism pending decision.
@@ -175,7 +202,9 @@ FROM source GROUP BY 1,2,3 ORDER BY 1,2,3"""
                  'chart_monthly_protocol': 'monthly active addresses by protocol',
                  'chart_roles_weekly': 'weekly active addresses by role',
                  'chart_roles_monthly': 'monthly active addresses by role',
-                 'chart_health': 'data coverage and health'}
+                 'chart_health': 'data coverage and health',
+                 'chart_ecosystem_weekly': 'weekly active addresses, all protocols',
+                 'chart_ecosystem_monthly': 'monthly active addresses, all protocols'}
         piece = sync_query(client, state, key, pilot_sql.CHARTS[key](), 'SCF35 · ' + names[key])
         run(client, state, key, piece)
     else:

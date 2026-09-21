@@ -119,6 +119,27 @@ más archives sin aprobación.
 - [x] Refresco de las queries de gráficos por MCP: `python3 scripts/deploy_pilot.py refresh-charts`. Hace falta porque la ejecución de una matview deja en su query origen solo `{"rows": N}` y los widgets no pueden colgar de las queries de métricas. Medido 2026-09-21: 0,172 cr por corrida (~5,2 cr/mes, costo de operación, no de construcción)
 - [ ] Programar `refresh-charts` a diario a las 10:30 UTC (crontab local, ver `docs/runbook.md`). Pendiente de instalar por el usuario
 - [x] Layout aplicado al dashboard 220644 el 2026-09-21: 2 textos (metodología, cobertura parcial) y 9 visualizaciones. Sigue **privado**; publicar requiere OK tras revisión
+- [x] Revisión 2026-09-21 (sondeos 9,3 cr): FxDAO inactivo de verdad (sin invocaciones a vaults ni `mint` de sus 4 assets desde junio). Aquarius **subcontado**: en 7 días 736 de 904 `deposit_liquidity` y 71.851 de 113.543 `trade` ocurren en pools sin evento del router. Blend plausible: 68% de 17.824 lenders activos un solo día, 89 contratos C
+- [x] Capa `result_scf_<p>_users_history` (sin cron todavía) para no re-escanear desde junio cada día. 5 creadas copiando de las matviews vivas: 6,1 cr (8797129 etherfuse, 8797130 fxdao, 8797131 blend, 8797133 soroswap, 8797135 phoenix)
+- [x] ⚠️ Aquarius history 8797138 reconstruida desde crudo con eventos de pool: **181,4 cr** (estimado 25 a 45), 25.700 filas contra ~8.300 del router solo. Superó el límite de 80 cr y el tope de 500: acumulado 539,8 cr. Detenido a la espera de decisión
+- [x] **Fase 0, puente (2026-09-21, 28,7 cr):** tope del script subido a 600 con OK del usuario (opción A). Las 6 vivas escanean desde `DATE '2026-09-17'` (literal, poda particiones) y la unión lee history (congelada hasta 2026-09-18) + viva. Refresco de las vivas: 18,8 cr (Aquarius 7,9; Phoenix 3,9; Etherfuse 2,3; Soroswap 2,1; Blend 1,6; FxDAO 1,0), antes ~117 cr/día. Validación 8 checks (nuevo `history_live_gap`) en 0. Aquarius pasa de 1.397 a 2.139 direcciones
+- [x] WAU y MAU del ecosistema (únicas entre protocolos, G y C por separado): queries 8797598 y 8797599, visualizaciones 12827594 y 12827595, agregadas al dashboard (privado)
+- [x] `getDuneQuery` por REST (`GET /api/v1/query/{id}`): la llave del `.env` funciona y el MCP devolvía cuerpos vacíos
+- [x] `.github/workflows/refresh-charts.yml` a las 10:30 UTC en vez de crontab local. Falta cargar el secret `DUNE_API_KEY` en GitHub y pushear
+- [ ] El puente crece un día por día (~4,7 cr más por cada día de ventana, Aquarius la mitad). Sirve una o dos semanas, no más. Lo reemplaza la Fase 1
+
+Acumulado del proyecto al cierre de la Fase 0: **568,5 cr** (tope 600).
+
+### Fase 1: volver al diseño de CLAUDE.md (reglas 1, 2, 3, 4, 5 y 7)
+
+El piloto se desvió en cuatro puntos: capas `users_*` sin montos (regla 3), vivas sin archive que re-escanean (regla 2), gráficos fuera de matviews (regla 1) y runbook desactualizado (regla 5). Pasos, uno por día, midiendo antes del siguiente:
+
+1. [ ] Llevar la lógica corregida del piloto a las queries de actividad (`queries/<p>/*_activity.sql`, esquema de `docs/modelo-de-datos.md`): atribución por evento en Soroswap y Phoenix, eventos de pool en Aquarius con lista literal y firmante solo de operaciones sobre pools. Probar cada una con 1 día (< 2 cr)
+2. [ ] Archives `result_scf_<p>_activity_archive`, historia completa, cron `0 3 1 * *`. Orden por costo esperado: FxDAO, Soroswap, Blend, Phoenix (optimizar antes: 45 cr por 112 días), Etherfuse (su archive de usuarios costó 102,65: **preguntar**), Aquarius (pools, probablemente > 80: **preguntar**)
+3. [ ] Vivas `result_scf_<p>_activity` (queries 8666xxx del paso 1): `closed_at > MAX(closed_at)` del archive más poda de 75 días, cron `0 5 * * *`
+4. [ ] `result_scf_activity` (unión de las 12), cron `0 6 * * *`. `result_scf_users` pasa a agregar desde ahí; las métricas y gráficos no cambian
+5. [ ] Retirar las capas `users_live`, `users_history` y el archive de usuarios de Etherfuse cuando la validación dé 0 con la capa nueva
+6. [ ] Decidir con Esteban: la regla 2 re-escanea toda la historia cada mes; con Aquarius por pools eso puede sumar más de 300 cr al mes solo en archives
 - [ ] `pipeline_status` se calcula al refrescar la matview de salud: si esa matview deja de correr, el estado queda congelado en OK. Mostrar siempre `live_refreshed_at` al lado
 
 ## Entregable 2: solapamiento de usuarios (Tranche 2, USD 3.333)

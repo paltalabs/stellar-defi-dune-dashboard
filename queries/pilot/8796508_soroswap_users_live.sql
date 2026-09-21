@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796508
 -- Matview: dune.paltalabs.result_scf_soroswap_users_live   cron: 0 5 * * *
--- Última ejecución: 01M32CZSDAYPQGG1NX0QCD95M9
--- Costo: 15.748 cr; filas: 10030; engine medium
+-- Última ejecución: 01M32KM1ECB3MEYARZ7JMTR0C7
+-- Costo: 2.139 cr; filas: 139; engine medium
 -- Generated from scripts/pilot_sql.py; T1 address activity only.
 -- Daily UTC buckets. Metadata survives an empty protocol and is never a user.
 WITH source AS (
@@ -39,7 +39,7 @@ ev AS (
     he.data_decoded
   FROM stellar.history_contract_events he
   JOIN contracts c ON c.contract_id = he.contract_id
-  WHERE he.closed_at_date >= DATE '2026-06-01' AND he.closed_at_date < CURRENT_DATE
+  WHERE he.closed_at_date >= DATE '2026-09-17' AND he.closed_at_date < CURRENT_DATE
     AND he.type_string = 'ContractEventTypeContract'
     AND he.successful = TRUE
     AND he.in_successful_contract_call = TRUE
@@ -70,9 +70,9 @@ WHERE (kind = 'router' AND action IN ('swap', 'add', 'remove'))
   GROUP BY 1, 2, 3, 4
 )
 SELECT protocol, activity_date, user_address, role, last_activity_at,
-       'activity' AS row_kind, DATE '2026-06-01' AS covered_from, CURRENT_DATE AS covered_until,
+       'activity' AS row_kind, DATE '2026-09-17' AS covered_from, CURRENT_DATE AS covered_until,
        CURRENT_TIMESTAMP AS refreshed_at, 'live' AS source_layer
 FROM users
 UNION ALL
 SELECT 'soroswap', CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),
-       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-06-01', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'
+       CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', DATE '2026-09-17', CURRENT_DATE, CURRENT_TIMESTAMP, 'live'
