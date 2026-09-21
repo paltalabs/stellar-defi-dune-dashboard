@@ -4,7 +4,7 @@
 -- Costo medido: 2026-09-10 6.27 cr, 188771 filas, engine medium, ventana 45 days
 -- Espejo escrito a mano el 2026-09-10 (el endpoint REST de lectura devolvió 401; ver docs/runbook.md). El SQL manda en Dune.
 
--- SCF35 · Aquarius activity. Schema: docs/modelo-de-datos.md in github.com/paltalabs/defi-dune-dashboards
+-- SCF35 · Aquarius activity. Schema: docs/modelo-de-datos.md in github.com/paltalabs/stellar-defi-dune-dashboard
 WITH routers AS (
   SELECT contract_id FROM (VALUES
     ('CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK'),   -- router (main)

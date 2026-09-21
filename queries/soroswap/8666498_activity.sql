@@ -4,7 +4,7 @@
 -- Costo medido: 2026-09-10 7.93 cr, 31598 filas, engine medium, ventana 45 days
 -- Espejo escrito a mano el 2026-09-10 (el endpoint REST de lectura devolvió 401; ver docs/runbook.md). El SQL manda en Dune.
 
--- SCF35 · Soroswap activity. Schema: docs/modelo-de-datos.md in github.com/paltalabs/defi-dune-dashboards
+-- SCF35 · Soroswap activity. Schema: docs/modelo-de-datos.md in github.com/paltalabs/stellar-defi-dune-dashboard
 WITH pairs AS (
   SELECT DISTINCT json_extract_scalar(val_decoded, '$.address') AS contract_id, 'pair' AS kind
   FROM stellar.contract_data

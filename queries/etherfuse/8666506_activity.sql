@@ -5,7 +5,7 @@
 -- Notas: el 95% de las filas son trades de bots market maker en USTRY y CETES; se agrupan por cuenta, operación y par
 -- Espejo escrito a mano el 2026-09-10 (el endpoint REST de lectura devolvió 401; ver docs/runbook.md). El SQL manda en Dune.
 
--- SCF35 · Etherfuse activity. Schema: docs/modelo-de-datos.md in github.com/paltalabs/defi-dune-dashboards
+-- SCF35 · Etherfuse activity. Schema: docs/modelo-de-datos.md in github.com/paltalabs/stellar-defi-dune-dashboard
 -- token_a / token_b carry the classic asset code (CETES, USTRY, XLM...) because stablebonds are classic assets.
 WITH ops AS (
   SELECT

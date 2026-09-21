@@ -4,7 +4,7 @@
 -- Costo medido: 2026-09-10 6.73 cr, 138807 filas, engine medium, ventana 45 days
 -- Espejo escrito a mano el 2026-09-10 (el endpoint REST de lectura devolvió 401; ver docs/runbook.md). El SQL manda en Dune.
 
--- SCF35 · Blend activity. Schema: docs/modelo-de-datos.md in github.com/paltalabs/defi-dune-dashboards
+-- SCF35 · Blend activity. Schema: docs/modelo-de-datos.md in github.com/paltalabs/stellar-defi-dune-dashboard
 WITH pools AS (
   SELECT DISTINCT json_extract_scalar(key_decoded, '$.vec[1].address') AS contract_id, 'pool' AS kind
   FROM stellar.contract_data
