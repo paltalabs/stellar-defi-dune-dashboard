@@ -187,7 +187,7 @@ subido de 2.000 a 2.500 (`pilot.json` → `cap_history`). Diseño y verificacion
 - [ ] ⚠️ Hallazgo del cuadre, afecta a los 7 protocolos: `CAST(raw * DECIMAL '0.0000001' AS DECIMAL(38,7))` redondea el séptimo decimal (los 116 esperados terminan en 0; error ≤ 5 unidades crudas por fila, 0,0000005 del token). Sin efecto en usuarios; irrelevante en USD. Decidir si se corrige solo hacia adelante o reconstruyendo archives (Sushi ~30 cr, todos ~1.135 cr)
 - [ ] El 2026-09-22 hubo 1.421 swaps de 551 wallets G en SushiSwap (3 a 7 wallets por día antes). Entra en la viva del 2026-09-23 y va a verse como un salto en WAU. Revisar si es una campaña o farming antes de publicar
 
-### Soroswap: aggregator por el SDEX ✅ 2026-09-22, 202,2 cr; acumulado del proyecto 2.172,6
+### Soroswap: aggregator por el SDEX ✅ 2026-09-22, 221,0 cr; acumulado del proyecto 2.204,2 (incluye 12,8 del cambio de cron de integridad)
 
 El plan inicial (2026-09-10) dejaba fuera de T1 los swaps del aggregator que salen por el SDEX
 clásico. No emiten eventos Soroban, así que esos usuarios no aparecían en ningún protocolo.
@@ -200,7 +200,7 @@ Decisión del usuario, conversada con Esteban: se integran en Soroswap con el mi
 - [x] Archive 8798502 reconstruido desde 2024-02-01: 150,5 cr, 633.608 filas (antes 590.915); incremental 2,5 cr. Viva 8666498: 10,5 cr, 40.510 filas
 - [x] `users`, métricas, integridad y validación refrescadas: 22,3 cr (`users_roles_weekly` midió 14,3; `users` 1,2 e `integrity` 1,1). Validación 9 checks en 0; salud 7 protocolos OK. Gráficos refrescados (0,65 cr, fuera de `pilot.json`)
 - [x] Resultado: primer swap por SDEX el 2025-09-10. 62.038 swaps y 155 filas de receptor distinto. 1.888 direcciones usaron la vía SDEX, 1.533 solo entran a Soroswap por ella y 970 no aparecían en ningún protocolo. Soroswap pasa de 2.652 a 4.192 direcciones observadas; en 28 días de 1.051 a 1.256 y de 35.692 a 61.883 acciones
-- [ ] Medir el costo de la viva de Soroswap en las próximas corridas diarias (la vía SDEX escanea `history_transactions` por memo)
+- [x] Costo de operación de la vía SDEX, medido A/B sobre la misma ventana (1 al 21 de septiembre): viva de Soroswap 7,80 cr sin SDEX (8808903) contra 8,75 con SDEX (8808914), +0,95 cr por corrida. La vía sola: 0,86 cr en esa ventana (8808925) y 1,42 cr en un mes completo (8808926, el peor caso de la viva). Recurrente: ~0,1 a 1,4 cr/día, **~25 cr/mes** más, más ~1,4 cr del agregado mensual del archive. Sondeos: 18,8 cr
 
 ## Entregable 2: solapamiento de usuarios (Tranche 2, USD 3.333)
 

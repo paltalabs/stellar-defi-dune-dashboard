@@ -219,8 +219,8 @@ Créditos de Dune, engine medium.
 | Fase 1: capas vivas | 59,4 |
 | Fase 1: usuarios, métricas, integridad, validación y gráficos | 11,6 |
 | Fase 1: retiro del piloto, sondeos y lecturas | 26,7 |
-| Soroswap: aggregator por el SDEX (sondeos, archive reconstruido, capas y refrescos) | 202,2 |
-| **Total construcción** | **2.086,6** |
+| Soroswap: aggregator por el SDEX (sondeos, archive reconstruido, capas, refrescos y costo de operación) | 221,0 |
+| **Total construcción** | **2.105,4** |
 
 Detalle de archives: Aquarius 519,4 · Phoenix 331,8 · Etherfuse 117,9 · Blend 87,8 ·
 Soroswap 65,4 (150,5 al reconstruirlo con el SDEX) · FxDAO 11,9. El tope inicial era 500 cr; se subió a 2.000 con aprobación, para

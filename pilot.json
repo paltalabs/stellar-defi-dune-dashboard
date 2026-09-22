@@ -4688,6 +4688,210 @@
         "executionCostCredits": "12.802"
       },
       "note": "refresco disparado al pasar el cron a semanal"
+    },
+    {
+      "key": "probe_live_cost_live_old_sql",
+      "query_id": 8808903,
+      "execution_id": "01M352530CV2NBJZ64WKH98NJ5",
+      "credits": 7.803,
+      "state": "COMPLETED",
+      "metadata": {
+        "columns": [
+          {
+            "name": "protocol",
+            "type": "varchar(8)"
+          },
+          {
+            "name": "contract_id",
+            "type": "varchar"
+          },
+          {
+            "name": "closed_at",
+            "type": "timestamp(3) with time zone"
+          },
+          {
+            "name": "tx_hash",
+            "type": "varchar"
+          },
+          {
+            "name": "user_address",
+            "type": "varchar"
+          },
+          {
+            "name": "action",
+            "type": "varchar"
+          },
+          {
+            "name": "role",
+            "type": "varchar(15)"
+          },
+          {
+            "name": "pool",
+            "type": "varchar"
+          },
+          {
+            "name": "token_a",
+            "type": "varchar"
+          },
+          {
+            "name": "amount_a",
+            "type": "decimal(38, 7)"
+          },
+          {
+            "name": "token_b",
+            "type": "varchar"
+          },
+          {
+            "name": "amount_b",
+            "type": "decimal(38, 7)"
+          },
+          {
+            "name": "row_kind",
+            "type": "varchar(8)"
+          },
+          {
+            "name": "covered_from",
+            "type": "date"
+          },
+          {
+            "name": "covered_until",
+            "type": "date"
+          },
+          {
+            "name": "refreshed_at",
+            "type": "timestamp(3) with time zone"
+          },
+          {
+            "name": "source_layer",
+            "type": "varchar(4)"
+          }
+        ],
+        "totalRowCount": 21010,
+        "executionCostCredits": "7.803"
+      }
+    },
+    {
+      "key": "probe_live_cost_live_new_sql",
+      "query_id": 8808914,
+      "execution_id": "01M3526847KEKRK6PZSVTF0C9B",
+      "credits": 8.748,
+      "state": "COMPLETED",
+      "metadata": {
+        "columns": [
+          {
+            "name": "protocol",
+            "type": "varchar(8)"
+          },
+          {
+            "name": "contract_id",
+            "type": "varchar"
+          },
+          {
+            "name": "closed_at",
+            "type": "timestamp(3) with time zone"
+          },
+          {
+            "name": "tx_hash",
+            "type": "varchar"
+          },
+          {
+            "name": "user_address",
+            "type": "varchar"
+          },
+          {
+            "name": "action",
+            "type": "varchar"
+          },
+          {
+            "name": "role",
+            "type": "varchar(15)"
+          },
+          {
+            "name": "pool",
+            "type": "varchar"
+          },
+          {
+            "name": "token_a",
+            "type": "varchar"
+          },
+          {
+            "name": "amount_a",
+            "type": "decimal(38, 7)"
+          },
+          {
+            "name": "token_b",
+            "type": "varchar"
+          },
+          {
+            "name": "amount_b",
+            "type": "decimal(38, 7)"
+          },
+          {
+            "name": "row_kind",
+            "type": "varchar(8)"
+          },
+          {
+            "name": "covered_from",
+            "type": "date"
+          },
+          {
+            "name": "covered_until",
+            "type": "date"
+          },
+          {
+            "name": "refreshed_at",
+            "type": "timestamp(3) with time zone"
+          },
+          {
+            "name": "source_layer",
+            "type": "varchar(4)"
+          }
+        ],
+        "totalRowCount": 40510,
+        "executionCostCredits": "8.748"
+      }
+    },
+    {
+      "key": "probe_live_cost_sdex_only_live_window",
+      "query_id": 8808925,
+      "execution_id": "01M35287DJYXBDZKKJP184EH3E",
+      "credits": 0.857,
+      "state": "COMPLETED",
+      "metadata": {
+        "columns": [
+          {
+            "name": "n",
+            "type": "bigint"
+          },
+          {
+            "name": "a",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "0.857"
+      }
+    },
+    {
+      "key": "probe_live_cost_sdex_only_full_month_aug",
+      "query_id": 8808926,
+      "execution_id": "01M352977XBQDX3DRJNSS6BJP4",
+      "credits": 1.421,
+      "state": "COMPLETED",
+      "metadata": {
+        "columns": [
+          {
+            "name": "n",
+            "type": "bigint"
+          },
+          {
+            "name": "a",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "1.421"
+      }
     }
   ],
   "visualizations": {
