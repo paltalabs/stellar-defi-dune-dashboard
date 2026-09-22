@@ -112,3 +112,23 @@ dashboard):
   concentración, no solo WAU. Para "cuánta gente usa el ecosistema", el WAU/MAU del ecosistema
   (direcciones únicas entre protocolos) y separar G de C.
 - El volumen en USD es del Entregable 3 (necesita precios) y no está en esta tabla.
+
+## Solapamiento entre protocolos (Entregable 2)
+
+Cuatro tablas sobre `result_scf_users`, sin tablas crudas (`scripts/pilot_sql.py`):
+
+- `result_scf_overlap_matrix`: para cada par (A, B), cuántas direcciones de A también usaron B, en
+  toda la historia y en los últimos 90 y 28 días. La diagonal son las direcciones de A (el check
+  `overlap_diagonal_vs_health` la compara con la tabla de salud). La matriz no es simétrica en
+  porcentaje: `share_of_a` se divide por las direcciones de A.
+- `result_scf_protocol_count`: cuántos protocolos usó cada dirección (1, 2, 3, 4+).
+- `result_scf_first_protocol`: el protocolo de entrada es el del primer día en que la dirección
+  aparece en cualquiera de los siete desde 2024-02-01. Si ese día aparece en dos, es `multiple`.
+  No es la creación de la cuenta, y SushiSwap solo puede ser de entrada desde 2026-03.
+- `result_scf_journeys`: del primer protocolo al segundo, por primer día visto en cada uno;
+  `none` = nunca usó un segundo protocolo.
+
+Las cuatro suman las mismas direcciones únicas (check `overlap_totals`). Los contratos
+intermediarios generan solapamiento artificial: un pool de Aquarius que recibe un swap del
+aggregator de Soroswap registra al contrato como usuario de Aquarius. Por eso las columnas solo G
+son la lectura principal.

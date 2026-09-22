@@ -329,6 +329,17 @@ WHERE new_observed + returning_observed <> active_addresses OR g_addresses + c_a
 UNION ALL
 SELECT 'cohort_partition_monthly', COUNT(*) FROM dune.paltalabs.result_scf_users_monthly
 WHERE new_observed + returning_observed <> active_addresses OR g_addresses + c_addresses <> active_addresses
+UNION ALL
+SELECT 'overlap_diagonal_vs_health', COUNT(*) FROM dune.paltalabs.result_scf_overlap_matrix m
+JOIN dune.paltalabs.result_scf_users_health h ON h.protocol = m.protocol_a
+WHERE m.window_name = 'all_time' AND m.protocol_a = m.protocol_b AND m.shared_addresses <> h.observed_addresses
+UNION ALL
+SELECT 'overlap_totals', ABS((SELECT COUNT(DISTINCT user_address) FROM users)
+  - (SELECT SUM(new_ecosystem_addresses) FROM dune.paltalabs.result_scf_first_protocol))
+  + ABS((SELECT COUNT(DISTINCT user_address) FROM users)
+  - (SELECT SUM(addresses) FROM dune.paltalabs.result_scf_protocol_count WHERE period_kind = 'all_time'))
+  + ABS((SELECT COUNT(DISTINCT user_address) FROM users)
+  - (SELECT SUM(addresses) FROM dune.paltalabs.result_scf_journeys))
 """
 
 
@@ -380,11 +391,158 @@ ORDER BY 1
 """
 
 
-CHARTS = {'chart_integrity': lambda: __import__('activity_sql').chart_integrity(),
+USERS = "dune.paltalabs.result_scf_users WHERE row_kind = 'activity' AND activity_date < CURRENT_DATE"
+FIRSTS = f"""SELECT user_address, protocol, MIN(activity_date) AS first_seen
+  FROM {USERS} GROUP BY 1, 2"""
+
+
+def overlap_matrix():
+    """Deliverable 2. Diagonal = addresses of the protocol, so share_of_a is 'of A's addresses,
+    how many also used B'. Intermediary contracts (aggregator, routers) inflate C overlap; the
+    G columns are the main view."""
+    return f"""-- Protocol x protocol shared addresses, all time and last 90/28 complete UTC days.
+WITH windows AS (
+  SELECT * FROM (VALUES ('all_time', DATE '{HISTORY_START}'),
+    ('last_90d', CAST(CURRENT_DATE - INTERVAL '90' DAY AS DATE)),
+    ('last_28d', CAST(CURRENT_DATE - INTERVAL '28' DAY AS DATE))) AS t(window_name, window_from)
+), pa AS (
+  SELECT DISTINCT w.window_name, w.window_from, u.protocol, u.user_address
+  FROM dune.paltalabs.result_scf_users u CROSS JOIN windows w
+  WHERE u.row_kind = 'activity' AND u.activity_date >= w.window_from AND u.activity_date < CURRENT_DATE
+), totals AS (
+  SELECT window_name, protocol, COUNT(*) AS protocol_addresses,
+         COUNT_IF(user_address LIKE 'G%') AS protocol_g_addresses
+  FROM pa GROUP BY 1, 2
+), pairs AS (
+  SELECT a.window_name, a.window_from, a.protocol AS protocol_a, b.protocol AS protocol_b,
+         COUNT(*) AS shared_addresses, COUNT_IF(a.user_address LIKE 'G%') AS shared_g_addresses
+  FROM pa a JOIN pa b ON a.window_name = b.window_name AND a.user_address = b.user_address
+  GROUP BY 1, 2, 3, 4
+)
+SELECT p.window_name, p.window_from, CURRENT_DATE AS window_until, p.protocol_a, p.protocol_b,
+       p.shared_addresses, p.shared_g_addresses, p.shared_addresses - p.shared_g_addresses AS shared_c_addresses,
+       t.protocol_addresses AS protocol_a_addresses, t.protocol_g_addresses AS protocol_a_g_addresses,
+       CAST(p.shared_addresses AS DOUBLE) / t.protocol_addresses AS share_of_a,
+       CAST(p.shared_g_addresses AS DOUBLE) / NULLIF(t.protocol_g_addresses, 0) AS g_share_of_a
+FROM pairs p JOIN totals t ON t.window_name = p.window_name AND t.protocol = p.protocol_a
+ORDER BY 1, 4, 5
+"""
+
+
+def protocol_count():
+    return f"""-- How many protocols each address used: all time, last 28 complete days, complete calendar months.
+WITH u AS (SELECT protocol, activity_date, user_address FROM {USERS}),
+per_period AS (
+  SELECT 'all_time' AS period_kind, DATE '{HISTORY_START}' AS period_start, user_address,
+         COUNT(DISTINCT protocol) AS protocols_used
+  FROM u GROUP BY 3
+  UNION ALL
+  SELECT 'last_28d', CAST(CURRENT_DATE - INTERVAL '28' DAY AS DATE), user_address, COUNT(DISTINCT protocol)
+  FROM u WHERE activity_date >= CURRENT_DATE - INTERVAL '28' DAY GROUP BY 3
+  UNION ALL
+  SELECT 'month', CAST(date_trunc('month', activity_date) AS DATE), user_address, COUNT(DISTINCT protocol)
+  FROM u WHERE activity_date < CAST(date_trunc('month', CURRENT_DATE) AS DATE) GROUP BY 2, 3
+), buckets AS (
+  SELECT period_kind, period_start,
+         CASE WHEN protocols_used >= 4 THEN '4+' ELSE CAST(protocols_used AS VARCHAR) END AS protocols_used,
+         COUNT(*) AS addresses, COUNT_IF(user_address LIKE 'G%') AS g_addresses,
+         COUNT_IF(user_address LIKE 'C%') AS c_addresses
+  FROM per_period GROUP BY 1, 2, 3
+)
+SELECT *, CAST(addresses AS DOUBLE) / SUM(addresses) OVER (PARTITION BY period_kind, period_start) AS share_of_addresses,
+       CAST(g_addresses AS DOUBLE) / NULLIF(SUM(g_addresses) OVER (PARTITION BY period_kind, period_start), 0) AS share_of_g_addresses
+FROM buckets ORDER BY 1, 2, 3
+"""
+
+
+def first_protocol():
+    return f"""-- Entry protocol of each address into the covered ecosystem (first day seen since {HISTORY_START}).
+-- Seen in two protocols on its first day -> 'multiple'. Not account creation.
+WITH firsts AS ({FIRSTS}),
+eco AS (SELECT user_address, MIN(first_seen) AS eco_first_seen, COUNT(*) AS protocols_used FROM firsts GROUP BY 1),
+entry AS (
+  SELECT e.user_address, e.eco_first_seen, e.protocols_used,
+         CASE WHEN COUNT(*) > 1 THEN 'multiple' ELSE MAX(f.protocol) END AS entry_protocol
+  FROM eco e JOIN firsts f ON f.user_address = e.user_address AND f.first_seen = e.eco_first_seen
+  GROUP BY 1, 2, 3
+)
+SELECT CAST(date_trunc('month', eco_first_seen) AS DATE) AS entry_month, entry_protocol,
+       COUNT(*) AS new_ecosystem_addresses,
+       COUNT_IF(user_address LIKE 'G%') AS g_addresses, COUNT_IF(user_address LIKE 'C%') AS c_addresses,
+       COUNT_IF(protocols_used > 1) AS used_other_protocols_later,
+       CAST(date_trunc('month', eco_first_seen) AS DATE) < CAST(date_trunc('month', CURRENT_DATE) AS DATE) AS is_complete
+FROM entry GROUP BY 1, 2 ORDER BY 1, 2
+"""
+
+
+def journeys():
+    return f"""-- First protocol -> second protocol per address (by first day seen). 'none' = never used a second one.
+WITH firsts AS ({FIRSTS}),
+ranked AS (SELECT *, DENSE_RANK() OVER (PARTITION BY user_address ORDER BY first_seen) AS step FROM firsts),
+steps AS (
+  SELECT user_address, step, MIN(first_seen) AS first_seen,
+         CASE WHEN COUNT(*) > 1 THEN 'multiple' ELSE MAX(protocol) END AS protocol
+  FROM ranked WHERE step <= 2 GROUP BY 1, 2
+), pairs AS (
+  SELECT s1.user_address, s1.protocol AS from_protocol, COALESCE(s2.protocol, 'none') AS to_protocol,
+         date_diff('day', s1.first_seen, s2.first_seen) AS days_to_second
+  FROM steps s1 LEFT JOIN steps s2 ON s2.user_address = s1.user_address AND s2.step = 2
+  WHERE s1.step = 1
+)
+SELECT from_protocol, to_protocol, COUNT(*) AS addresses,
+       COUNT_IF(user_address LIKE 'G%') AS g_addresses, COUNT_IF(user_address LIKE 'C%') AS c_addresses,
+       CAST(COUNT(*) AS DOUBLE) / SUM(COUNT(*)) OVER (PARTITION BY from_protocol) AS share_of_from,
+       approx_percentile(days_to_second, 0.5) AS median_days_to_second
+FROM pairs GROUP BY 1, 2 ORDER BY 1, 3 DESC
+"""
+
+
+def chart_overlap():
+    return """-- Chart source: protocol x protocol overlap, all time and last 90 days, off-diagonal pairs.
+SELECT window_name, protocol_a, protocol_b, shared_addresses, shared_g_addresses, protocol_a_addresses,
+       share_of_a, g_share_of_a
+FROM dune.paltalabs.result_scf_overlap_matrix
+WHERE window_name IN ('all_time', 'last_90d') AND protocol_a <> protocol_b AND shared_addresses > 0
+ORDER BY window_name, share_of_a DESC
+"""
+
+
+def chart_protocol_count():
+    return """-- Chart source: addresses by number of protocols used, complete calendar months.
+SELECT period_start, protocols_used, addresses, g_addresses, share_of_addresses
+FROM dune.paltalabs.result_scf_protocol_count
+WHERE period_kind = 'month'
+ORDER BY period_start, protocols_used
+"""
+
+
+def chart_first_protocol():
+    return """-- Chart source: new ecosystem addresses per month by entry protocol, complete months.
+SELECT entry_month, entry_protocol, new_ecosystem_addresses, g_addresses, used_other_protocols_later
+FROM dune.paltalabs.result_scf_first_protocol
+WHERE is_complete
+ORDER BY entry_month, entry_protocol
+"""
+
+
+def chart_journeys():
+    return """-- Chart source: first -> second protocol journeys, excluding addresses that stayed in one protocol.
+SELECT from_protocol, to_protocol, addresses, g_addresses, share_of_from, median_days_to_second
+FROM dune.paltalabs.result_scf_journeys
+WHERE to_protocol <> 'none'
+ORDER BY addresses DESC
+"""
+
+
+CHARTS = {'chart_integrity':lambda: __import__('activity_sql').chart_integrity(),
           'chart_ecosystem_weekly': lambda: chart_ecosystem('week'),
           'chart_ecosystem_monthly': lambda: chart_ecosystem('month'),
 'chart_weekly_protocol': lambda: chart_protocol('week'),
           'chart_monthly_protocol': lambda: chart_protocol('month'),
           'chart_roles_weekly': lambda: chart_roles('week'),
           'chart_roles_monthly': lambda: chart_roles('month'),
-          'chart_health': chart_health}
+          'chart_health': chart_health,
+          'chart_overlap': chart_overlap,
+          'chart_protocol_count': chart_protocol_count,
+          'chart_first_protocol': chart_first_protocol,
+          'chart_journeys': chart_journeys}
