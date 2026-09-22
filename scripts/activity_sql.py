@@ -52,6 +52,11 @@ EVENT_FILTERS = """AND he.type_string = 'ContractEventTypeContract'
     AND he.successful = TRUE AND he.in_successful_contract_call = TRUE"""
 
 
+def re_contract(value):
+    import re
+    return bool(re.fullmatch(r'C[A-Z2-7]{55}', value or ''))
+
+
 def lit(values):
     return ', '.join(f"'{v}'" for v in values)
 
@@ -196,8 +201,11 @@ def aquarius(win):
     has the user). deposit/withdraw_liquidity carry no user: the invoking operation's source account
     is used, looked up only among operations that call a pool directly (a literal contract list, so it
     prunes; a deposit routed through another contract has no signer here and is not counted). Pool
-    amount positions for deposit ([a, b, shares]) and withdraw ([shares, a, b]) come from one sample
-    and are not verified against Aquarius docs. Measured 2026-09-22 on one day: 1,78 cr; deduplicating
+    deposit and withdraw data are both [shares, a, b(, c)]: verified 2026-09-22 against the token
+    transfers of the same tx on 7 dates from 2024-11 to 2026-09 (query 8810390, a = vec[1] in every
+    event, never vec[0]). Until then deposits were read as [a, b, shares]: rows before 2026-09-01
+    in the archive keep shares in amount_a and token a's amount in amount_b (prices_sql.lp_tx
+    corrects the valuation). The third token of 3-token pools is not kept. Measured 2026-09-22 on one day: 1,78 cr; deduplicating
     on extracted fields instead of the raw event measured worse (2,98) and was reverted."""
     pools = [r['contract_id'] for r in contracts('aquarius', 'pool')]
     i128 = lambda path, col='data_decoded': f"TRY(CAST(COALESCE(json_extract_scalar({col}, '{path}.i128'), json_extract_scalar({col}, '{path}.u128')) AS DECIMAL(38,0)))"
@@ -262,10 +270,10 @@ UNION ALL
 SELECT 'aquarius', d.contract_id, d.closed_at, d.tx_hash, s.source_account,
        CASE d.action WHEN 'deposit_liquidity' THEN 'pool_deposit' ELSE 'pool_withdraw' END, 'lp', d.contract_id,
        json_extract_scalar(d.topics_decoded, '$[1].address'),
-       CAST(CASE d.action WHEN 'deposit_liquidity' THEN {i128('$.vec[0]', 'd.data_decoded')} ELSE {i128('$.vec[1]', 'd.data_decoded')} END
+       CAST({i128('$.vec[1]', 'd.data_decoded')}
             * DECIMAL '0.0000001' AS DECIMAL(38,7)),
        json_extract_scalar(d.topics_decoded, '$[2].address'),
-       CAST(CASE d.action WHEN 'deposit_liquidity' THEN {i128('$.vec[1]', 'd.data_decoded')} ELSE {i128('$.vec[2]', 'd.data_decoded')} END
+       CAST({i128('$.vec[2]', 'd.data_decoded')}
             * DECIMAL '0.0000001' AS DECIMAL(38,7))
 FROM direct_lp d JOIN signer s ON s.transaction_id = d.transaction_id"""
 
