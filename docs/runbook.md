@@ -21,6 +21,11 @@ capa común y métricas:
 solapamiento (Entregable 2, desde 2026-09-22):
   SCF35 · protocol overlap matrix / protocols per address / entry protocol / protocol journeys
                                        result_scf_overlap_matrix, _protocol_count, _first_protocol, _journeys   diario 09:00
+precios y LPs (Entregable 3, desde 2026-09-22):
+  SCF35 · token prices daily           result_scf_token_prices           diario 06:00  se lee a sí misma, recalcula 7 días
+  SCF35 · lp tx                        result_scf_lp_tx                  diario 08:30  acciones LP valorizadas en USD
+  SCF35 · lp periods / lp top / lp price coverage
+                                       result_scf_lp_periods, _lp_top, _lp_price_coverage   diario 09:00
   SCF35 · users validation             result_scf_users_validation       diario 10:00
 gráficos:
   queries SCF35 · ... que hacen SELECT sobre las matviews, con schedule de Dune a las 10:30 (ver abajo)
@@ -37,7 +42,8 @@ build sí escanea toda la historia. Repetir un escaneo completo es un paso a man
 
 ### Cadena diaria
 
-05:00 vivas → 08:00 users → 09:00 métricas e integridad → 10:00 validación → 10:30 gráficos.
+05:00 vivas → 06:00 precios → 08:00 users → 08:30 lp_tx → 09:00 métricas, solapamiento, LPs e integridad →
+10:00 validación → 10:30 gráficos.
 Dune no garantiza orden entre matviews; los horarios dejan margen. La tabla de salud marca
 `STALE` si la viva no corrió en 36 h.
 
@@ -65,6 +71,11 @@ En cada query, `Schedule` → diario → 10:30 UTC → engine medium:
 | https://dune.com/queries/8810228 | Addresses by number of protocols used |
 | https://dune.com/queries/8810230 | New ecosystem addresses by entry protocol |
 | https://dune.com/queries/8810231 | User journeys, first to second protocol |
+| https://dune.com/queries/8810431 | Active LPs, weekly (Entregable 3) |
+| https://dune.com/queries/8810432 | Active LPs, USD added and net flow, monthly |
+| https://dune.com/queries/8810434 | Top 100 LPs by USD added |
+| https://dune.com/queries/8810435 | Largest LP actions in USD, last 30 days |
+| https://dune.com/queries/8810437 | LP valuation coverage |
 
 Costo medido: unos 0,5 cr por corrida de las 8 de la T1; las 4 del solapamiento suman 0,13 cr. `python3 scripts/deploy_pilot.py refresh-charts`
 hace lo mismo por API si hace falta refrescarlas a mano.
@@ -83,6 +94,9 @@ Orden exacto (cada paso espera la primera ejecución del anterior):
    `users_roles_monthly`, `users_health`, `integrity`, `overlap_matrix`, `protocol_count`,
    `first_protocol`, `journeys`, y al final `metric users_validation` (sus checks de solapamiento
    leen esas cuatro tablas).
+   Para el Entregable 3, antes de la validación: `export-tokens` (escribe `data/tokens.csv`),
+   `prices build` (primer build desde 2024-02-01, 45,5 cr), `prices` (deja el SQL incremental),
+   `metric lp_tx`, `lp_periods`, `lp_top`, `lp_price_coverage`.
 4. `chart <clave>` para cada gráfico, schedule en la UI (tabla de arriba), visualizaciones y
    dashboard (ids en `pilot.json` → `visualizations` y `dashboard_after_layout`).
 
@@ -114,6 +128,10 @@ Así se agregó SushiSwap el 2026-09-22 (84,5 cr en total, detalle en `plan.md`)
    dashboard.
 
 ## Si algo se rompe
+
+- **Aparece un token nuevo en las capas.** El check `unknown_tokens` pasa a mayor que 0 y sus
+  acciones LP salen sin precio. Arreglo: `export-tokens`, `prices` y `metric lp_tx` (el SQL lleva
+  la lista literal de tokens).
 
 - **Un protocolo despliega un pool nuevo.** El registro lo encuentra el lunes y el check
   `unregistered_contracts` pasa a mayor que 0. Arreglo: `export-registry`, y volver a desplegar

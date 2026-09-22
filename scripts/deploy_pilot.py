@@ -11,6 +11,8 @@ from pathlib import Path
 from dune_mcp import DuneMCP, ROOT
 import pilot_sql
 import activity_sql
+import prices_sql
+import sac
 
 STATE = ROOT / 'pilot.json'
 
@@ -155,6 +157,62 @@ def export_registry(client, state):
     print(json.dumps({'registry_rows': len(rows)}), flush=True)
 
 
+def probe_rows(client, state, key, sql, limit=32000):
+    # Temporary query, executed on medium, all rows back; cost recorded like any probe.
+    created = client.call('createDuneQuery', {'name': f'[SCF35 probe] {key}', 'query': sql, 'is_temp': True,
+                                              'is_private': False})
+    query_id = created.get('query_id') or created.get('queryId')
+    started = client.call('executeQueryById', {'query_id': query_id, 'performance': 'medium'})
+    execution_id = started.get('execution_id') or started.get('executionId')
+    result = client.call('getExecutionResults', {'executionId': execution_id, 'timeout': 280, 'limit': limit})
+    record_probe(client, state, key, {'query': {'query_id': query_id}, 'execution': {'execution_id': execution_id},
+                                      'result_preview': result})
+    return (result.get('data') or {}).get('rows') or []
+
+
+def export_tokens(client, state):
+    # data/tokens.csv: every token of the activity layers with its classic asset and decimals.
+    counts = {r['token']: r['rows_'] for r in probe_rows(client, state, 'tokens_layer', prices_sql.layer_tokens())}
+    contracts = sorted(t for t in counts if activity_sql.re_contract(t))
+    found = {}
+    for r in probe_rows(client, state, 'tokens_sac', prices_sql.sac_assets(contracts)):
+        found[r['contract_id']] = {'kind': 'sac', 'asset': f"{r['asset_code']}:{r['asset_issuer']}", 'symbol': r['asset_code'], 'decimals': 7}
+    rest = [c for c in contracts if c not in found]
+    for r in probe_rows(client, state, 'tokens_instance', prices_sql.instances(rest)):
+        instance = json.loads(r['instance']) if isinstance(r['instance'], str) else r['instance']
+        body = instance.get('contract_instance') or {}
+        meta = {}
+        for entry in body.get('storage') or []:
+            if entry['key'] == {'symbol': 'METADATA'}:
+                meta = {kv['key']['symbol']: list(kv['val'].values())[0] for kv in entry['val']['map']}
+        if body.get('executable') == 'stellar_asset':
+            continue  # SAC without a coded entry (native): derived below
+        found[r['contract_id']] = {'kind': 'wasm', 'asset': '', 'symbol': meta.get('symbol', ''),
+                                   'decimals': meta.get('decimals', meta.get('decimal', ''))}
+    candidates = {a['asset'] for a in probe_rows(client, state, 'tokens_sdex_assets', prices_sql.sdex_assets())}
+    candidates |= {t for t in counts if ':' in t} | {'native'}
+    derived = {sac.sac_id(a): a for a in candidates}
+    rows = []
+    for token in sorted(counts):
+        if token in found:
+            row = found[token]
+        elif token in derived:
+            asset = derived[token]
+            row = {'kind': 'sac', 'asset': asset, 'symbol': 'XLM' if asset == 'native' else asset.split(':')[0], 'decimals': 7}
+        elif ':' in token or token == 'native':
+            row = {'kind': 'classic', 'asset': token, 'symbol': 'XLM' if token == 'native' else token.split(':')[0], 'decimals': 7}
+        else:
+            row = {'kind': 'unknown', 'asset': '', 'symbol': '', 'decimals': ''}
+        rows.append({'token': token, **row, 'layer_rows': counts[token]})
+    import csv
+    with open(prices_sql.TOKENS_CSV, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=['token', 'kind', 'asset', 'symbol', 'decimals', 'layer_rows'])
+        writer.writeheader()
+        writer.writerows(rows)
+    from collections import Counter
+    print(json.dumps({'tokens': len(rows), 'kinds': Counter(r['kind'] for r in rows)}), flush=True)
+
+
 def adopt_step1_query(client, state, protocol, key):
     # The live layer reuses the step-1 query (queries/<p>/<id>_activity.sql); verify it first.
     path = next((ROOT / 'queries' / protocol).glob('*_activity.sql'))
@@ -171,7 +229,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('command', choices=['inspect', 'probe', 'archive', 'live', 'metric', 'chart', 'refresh-charts', 'history', 'history-incremental', 'set-cron', 'finish',
                                             'registry', 'export-registry', 'test-activity', 'activity-archive', 'activity-live',
-                                            'activity-archive-incremental'])
+                                            'activity-archive-incremental', 'export-tokens', 'prices'])
     parser.add_argument('target', nargs='?')
     parser.add_argument('cron', nargs='?')
     args = parser.parse_args()
@@ -191,7 +249,9 @@ def main():
     if args.command == 'refresh-charts':
         # Daily re-run of the chart queries after the matviews refresh (validation cron 10:00 UTC).
         # Operating cost, not construction: logged to stdout, not to pilot.json.
-        for key in pilot_sql.CHARTS:
+        for key in {**pilot_sql.CHARTS, **prices_sql.CHARTS}:
+            if key not in state['pieces']:
+                continue
             query_id = state['pieces'][key]['query_id']
             started = client.call('executeQueryById', {'query_id': query_id, 'performance': 'medium'})
             execution_id = started.get('execution_id') or started.get('executionId')
@@ -208,6 +268,16 @@ def main():
                            'SCF35 · contract registry')
         run(client, state, 'contracts', piece, 'result_scf_contracts', '0 2 * * 1')
         export_registry(client, state)
+        return
+    if args.command == 'export-tokens':
+        export_tokens(client, state)
+        return
+    if args.command == 'prices':
+        # First build scans the SDEX since 2024-02-01; afterwards the self-reading incremental SQL.
+        key = 'token_prices'
+        build = key not in state['pieces'] or args.target == 'build'
+        piece = sync_query(client, state, key, prices_sql.prices(incremental=not build), 'SCF35 · token prices daily')
+        run(client, state, key, piece, 'result_scf_token_prices', '0 6 * * *')
         return
     if args.command == 'export-registry':
         export_registry(client, state)
@@ -303,7 +373,11 @@ FROM source GROUP BY 1,2,3 ORDER BY 1,2,3"""
                  'chart_protocol_count': 'protocols per address, monthly',
                  'chart_first_protocol': 'entry protocol of new addresses',
                  'chart_journeys': 'first to second protocol journeys'}
-        piece = sync_query(client, state, key, pilot_sql.CHARTS[key](), 'SCF35 · ' + names[key])
+        names.update({'chart_lp_weekly': 'active LPs and USD flows, weekly', 'chart_lp_monthly': 'active LPs and USD flows, monthly',
+                      'chart_lp_top': 'top LPs by USD added', 'chart_lp_tx': 'largest LP actions in USD',
+                      'chart_price_coverage': 'LP valuation coverage'})
+        charts = {**pilot_sql.CHARTS, **prices_sql.CHARTS}
+        piece = sync_query(client, state, key, charts[key](), 'SCF35 · ' + names[key])
         run(client, state, key, piece)
     else:
         functions = {'users': activity_sql.users, 'users_health': pilot_sql.health,
@@ -316,13 +390,15 @@ FROM source GROUP BY 1,2,3 ORDER BY 1,2,3"""
                      'overlap_matrix': pilot_sql.overlap_matrix,
                      'protocol_count': pilot_sql.protocol_count,
                      'first_protocol': pilot_sql.first_protocol,
-                     'journeys': pilot_sql.journeys}
+                     'journeys': pilot_sql.journeys,
+                     'lp_tx': prices_sql.lp_tx, 'lp_periods': prices_sql.lp_periods, 'lp_top': prices_sql.lp_top,
+                     'lp_price_coverage': prices_sql.price_coverage}
         key = args.target
         names = {'integrity': 'activity concentration (data integrity)',
                  'overlap_matrix': 'protocol overlap matrix', 'protocol_count': 'protocols per address',
                  'first_protocol': 'entry protocol', 'journeys': 'protocol journeys'}
         piece = sync_query(client, state, key, functions[key](), 'SCF35 · ' + names.get(key, key.replace('_', ' ')))
-        cron = {'users': '0 8 * * *', 'users_validation': '0 10 * * *'}.get(key, '0 9 * * *')
+        cron = {'users': '0 8 * * *', 'users_validation': '0 10 * * *', 'lp_tx': '30 8 * * *'}.get(key, '0 9 * * *')
         run(client, state, key, piece, 'result_scf_' + key, cron)
 
 

@@ -298,6 +298,9 @@ FROM previous ORDER BY period_start, protocol{role_select}
 def validation():
     import activity_sql
     registered = activity_sql.lit(activity_sql.registered_literals())
+    import prices_sql
+    known_tokens = activity_sql.lit(t['token'] for t in prices_sql.tokens())
+    lp_rows = activity_sql.all_activity('1 AS one', "row_kind = 'activity' AND role = 'lp'")
     return f"""WITH users AS (SELECT * FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity'),
 duplicate_keys AS (
   SELECT protocol, activity_date, user_address, role, COUNT(*) AS n
@@ -340,6 +343,15 @@ SELECT 'overlap_totals', ABS((SELECT COUNT(DISTINCT user_address) FROM users)
   - (SELECT SUM(addresses) FROM dune.paltalabs.result_scf_protocol_count WHERE period_kind = 'all_time'))
   + ABS((SELECT COUNT(DISTINCT user_address) FROM users)
   - (SELECT SUM(addresses) FROM dune.paltalabs.result_scf_journeys))
+UNION ALL
+SELECT 'unknown_tokens', COUNT(*) FROM (
+  SELECT DISTINCT token FROM dune.paltalabs.result_scf_lp_tx
+  CROSS JOIN UNNEST(ARRAY[token_a, token_b]) AS t(token)
+  WHERE token IS NOT NULL AND token NOT IN ({known_tokens})
+)
+UNION ALL
+SELECT 'lp_tx_vs_layers', ABS((SELECT COUNT(*) FROM dune.paltalabs.result_scf_lp_tx)
+  - (SELECT COUNT(*) FROM ({lp_rows}) AS x))
 """
 
 

@@ -232,11 +232,30 @@ más. Entrada: Blend 35.313, Aquarius 27.488, Etherfuse 6.122, Phoenix 4.877, So
 luego Blend → Aquarius (608, 1 día) y Aquarius → Soroswap (555, 167 días). En toda la historia,
 5.546 direcciones usaron Blend y Aquarius.
 
-## Entregable 3: actividad de LPs (Tranche 2, USD 5.000)
+## Entregable 3: actividad de LPs (Tranche 2, USD 5.000) ✅ 2026-09-22, 112,9 cr; acumulado del proyecto 2.329,7
 
-Necesita precios en USD. Se hace una tabla diaria propia acotada a los tokens que aparecen en la
-actividad LP (patrón de `dune-dashboards`: 8 assets 1,35 cr/día). LPs activos, top LPs, valor por
-transacción. Las columnas `token_*` y `amount_*` ya están en la actividad.
+SQL en `scripts/prices_sql.py`; tokens en `data/tokens.csv` (`deploy_pilot.py export-tokens`);
+precios con `deploy_pilot.py prices`; métricas con `metric <clave>`. Diseño en
+`docs/modelo-de-datos.md`, secciones Precios y LPs.
+
+- [x] Universo: 356 tokens en filas de swap y LP (285 contratos, 71 clásicos de la vía SDEX). 255 SAC unidos a su asset clásico (253 por `stellar.contract_data`, XLM y sUSD derivados offline con `scripts/sac.py`, validado 253 de 253), 28 wasm con decimales de su METADATA (6, 8, 9 y 18 además de 7; 4 sin METADATA quedan en 7). Export 1,4 cr
+- [x] Sondeos (29,7 cr, en `pilot.json` como `probe_t2_manual`). El caro: 18,6 cr para verificar el formato de Aquarius en 7 fechas (8810390); 5,5 cr en una consulta a `contract_data` con `ORDER BY` sin poda (8810298), no repetir
+- [x] `result_scf_token_prices` 8810347, cron 06:00: VWAP diario del SDEX contra USDC de Circle, si no contra XLM × XLM/USDC; mínimo USD 50 de volumen; si no hay SDEX, precio implícito por swaps Soroban. Build desde 2024-02-01: **45,5 cr** (estimé 15 a 25), 87.023 filas. Incremental que se lee a sí mismo y recalcula 7 días: 1,73 cr (~52 cr/mes)
+- [x] Verificación contra CoinGecko, 365 días: XLM desvío mediano 0,98% (95,3% de los días < 5%), AQUA 0,77% (98,4% < 5%)
+- [x] ⚠️ **Bug de la capa de Aquarius encontrado y corregido:** `deposit_liquidity` trae `[shares, a, b]` (verificado contra las transferencias de la misma tx en 7 fechas, `a` nunca en `vec[0]`), el parser leía `[a, b, shares]`. Afectaba solo montos de 66.090 `pool_deposit`, no usuarios. Corregido hacia adelante: viva 8666484 (22,9 cr, 416.255 filas) y SQL incremental del archive 8798647 (sin refresco). Historia anterior a 2026-09-01: `lp_tx` la valoriza como 2 × monto de A (se evita reconstruir el archive, ~519 cr)
+- [x] `result_scf_lp_tx` 8810356, cron 08:30: 125.866 acciones LP valorizadas (= filas LP de las capas). Reglas: legado de Aquarius 2 × A; lados que difieren más de 10× → 2 × el menor; un solo lado con precio → 2 × ese lado; SushiSwap suma los lados. 1,17 cr
+- [x] `result_scf_lp_periods` 8810357 (LPs activos y USD agregado/retirado por semana y mes, por protocolo y "all AMMs", 2,84 cr), `result_scf_lp_top` 8810359 (top 100 por USD agregado, histórico, 90 y 30 días, 1,07 cr), `result_scf_lp_price_coverage` 8810360 (1,08 cr). Cron 09:00
+- [x] Validación con 2 checks nuevos (`unknown_tokens`, `lp_tx_vs_layers`): 13 checks en 0
+- [x] Gráficos 8810431, 8810432, 8810434, 8810435, 8810437 (0,24 cr), 7 visualizaciones, sección "Liquidity providers" en el dashboard (sigue privado)
+- [ ] **Usuario:** programar los 5 gráficos nuevos en la UI de Dune a las 10:30 UTC (runbook)
+- [ ] Medir las corridas diarias de `token_prices` y `lp_*` del 2026-09-23
+- [ ] Cuando aparezca un token nuevo, `unknown_tokens` > 0: `export-tokens` y volver a desplegar `prices` y `metric lp_tx`
+
+Resultado al 2026-09-22: cobertura de precio en 90 días, Aquarius 95,6%, SushiSwap 99,7%, Phoenix
+100%, Soroswap 63% (129 acciones; las parciales se valorizan por el lado con precio). USD agregado
+por mes entre 1,3 y 17,2 M desde junio de 2025; entre 245 y 3.743 LPs activos por mes. El
+depósito más grande: 3 M PYUSD + 3 M USDC en Aquarius (2025-10-31). FxDAO (987 acciones del locking
+pool) cuenta LPs pero no tiene USD: sus operaciones no traen montos por token.
 
 ## Entregable 4: flujos y migraciones de liquidez (Tranche 3, USD 8.333)
 
