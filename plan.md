@@ -180,7 +180,8 @@ subido de 2.000 a 2.500 (`pilot.json` → `cap_history`). Diseño y verificacion
 - [x] Viva 8807612 `result_scf_sushiswap_activity`, cron `0 5 * * *`: 2,7 cr, 7.652 filas
 - [x] `users`, métricas, integridad y validación reconstruidas con las 14 capas: 25,3 cr. Validación 9 checks en 0; salud: 7 protocolos OK, SushiSwap 288 direcciones (37 C) desde 2026-03-01
 - [x] Gráficos refrescados (0,6 cr) y texto del dashboard con SushiSwap (sigue privado)
-- [ ] ⚠️ Medir el costo de las corridas de mañana: `users` midió 5,8 cr e `integrity` 11,5 cr en este refresco, contra ~1,1 cr cada una antes. Si se repite, son ~450 cr/mes más y hay que revisar la lectura de las 14 capas
+- [x] `integrity` pasa a semanal (lunes 09:00): mira 28 días, a diario no aporta. El cambio de cron disparó un refresco de 12,8 cr
+- [ ] ⚠️ Costo variable: la misma `integrity`, con los mismos datos, costó 11,46 (15:46), 1,14 (16:42) y 12,80 cr (16:53) el 2026-09-22. El salto no se debe a Sushi. Medir la corrida diaria de `users` del 2026-09-23 (5,8 cr en el refresco con Sushi, ~1,1 antes) y la de `integrity` del lunes 2026-09-28 antes de decidir nada
 - [x] Chequeo crudo contra capa (2026-03-11, 2026-08-26, 2026-09-01, este último en el borde archive/viva): 0 diferencias en swap, mint y collect; solo faltan los `burn` (excluidos a propósito) y 3 `migrated`/`upgraded` administrativos. 0,29 cr
 - [x] Cuadre de saldos: para los 58 pools, mint + swaps − collect desde la capa contra `bline` al cierre de ayer. 58 de 58 cuadran dentro del redondeo (máximo 3.773 unidades crudas en el pool de 80.850 filas). 1,1 cr
 - [ ] ⚠️ Hallazgo del cuadre, afecta a los 7 protocolos: `CAST(raw * DECIMAL '0.0000001' AS DECIMAL(38,7))` redondea el séptimo decimal (los 116 esperados terminan en 0; error ≤ 5 unidades crudas por fila, 0,0000005 del token). Sin efecto en usuarios; irrelevante en USD. Decidir si se corrige solo hacia adelante o reconstruyendo archives (Sushi ~30 cr, todos ~1.135 cr)

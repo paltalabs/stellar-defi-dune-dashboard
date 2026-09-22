@@ -16,7 +16,8 @@ por protocolo (blend, aquarius, soroswap, phoenix, fxdao, etherfuse, sushiswap):
 capa común y métricas:
   SCF35 · users                        result_scf_users                  diario 08:00  grano diario (protocolo, día, dirección, rol) desde las 12 capas
   SCF35 · users weekly / monthly / roles weekly / roles monthly / health, activity concentration
-                                       result_scf_users_*, result_scf_integrity          diario 09:00
+                                       result_scf_users_*                                diario 09:00
+  SCF35 · activity concentration       result_scf_integrity              lunes 09:00   ventana de 28 días; semanal desde 2026-09-22
   SCF35 · users validation             result_scf_users_validation       diario 10:00
 gráficos:
   queries SCF35 · ... que hacen SELECT sobre las matviews, con schedule de Dune a las 10:30 (ver abajo)
