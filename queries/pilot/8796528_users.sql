@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796528
 -- Matview: dune.paltalabs.result_scf_users   cron: 0 8 * * *
--- Última ejecución: 01M34WMVSYXFBX5A40SQ4EJ760
--- Costo: 5.81 cr; filas: 734660; engine medium
+-- Última ejecución: 01M34ZSNYHBHTFPYW221ZRCKXT
+-- Costo: 1.249 cr; filas: 738834; engine medium
 -- Daily user grain derived from the twelve normalized activity layers (CLAUDE.md rules 2 and 3).
 WITH act AS (
 SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_blend_activity_archive WHERE row_kind = 'activity'

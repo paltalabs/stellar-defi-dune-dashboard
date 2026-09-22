@@ -60,6 +60,7 @@ protocols:
     kind: amm_and_aggregator
     docs: https://docs.soroswap.finance
     user_source: events            # SoroswapPair swap/deposit/withdraw (to), SoroswapRouter swap, SoroswapAggregator swap
+    sdex_source: memo              # aggregator via SDEX: txs with memo 'SoroswapAggregator%' + path payments; tx account and recipient (desde 2026-09-22)
     contracts:
       factory: CA4HEQTL2WPEUYKYKCDOHCDNIV4QHNJ7EL4J4NQ6VADP7SYHVRYZ7AW2
       router: CAG5LRYQ5JVEUI5TEID72EYOVX44TTUJT5BQR2J6J77FH65PCCFAJDDH

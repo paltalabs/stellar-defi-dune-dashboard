@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8798721
 -- Matview: dune.paltalabs.result_scf_integrity   cron: 0 9 * * *
--- Última ejecución: 01M34WRW16D49RHA5NJ5BY2VAB
--- Costo: 11.462 cr; filas: 8; engine medium
+-- Última ejecución: 01M34ZZ1NKVF1C4WG5EJ872RT8
+-- Costo: 1.144 cr; filas: 8; engine medium
 -- Activity concentration per protocol vs all protocols, last 28 complete days (UTC).
 WITH act AS (
 SELECT protocol, user_address, closed_at FROM dune.paltalabs.result_scf_blend_activity_archive WHERE row_kind = 'activity' AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) >= CURRENT_DATE - INTERVAL '28' DAY AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) < CURRENT_DATE

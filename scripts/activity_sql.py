@@ -272,7 +272,15 @@ FROM direct_lp d JOIN signer s ON s.transaction_id = d.transaction_id"""
 
 def soroswap(win):
     """One row per event (grain includes the event payload): pivoting per transaction merged
-    several swaps of one tx and kept only one recipient."""
+    several swaps of one tx and kept only one recipient.
+
+    The aggregator also routes through the classic SDEX, which emits no Soroban event: successful
+    txs with memo 'SoroswapAggregator-<apiUser>' and their path payments, same criterion as
+    paltalabs/dune-dashboards (queries 8395684 and 8395746). The tx account is the user; the path
+    payment recipient counts too when it differs, in a row without amounts so volume is not doubled.
+    A Soroban tx holds a single operation, so no tx is in both sources. Classic amounts are already
+    in token units; tokens are 'native' or 'CODE:ISSUER'. 30 days to 2026-09-22 (probe 8808241,
+    4,9 cr): 27.534 path payments, 226 addresses, 138 of them absent from every other layer."""
     pairs = [r['contract_id'] for r in contracts('soroswap', 'pair')]
     kinds = f"""CASE WHEN he.contract_id = '{SOROSWAP_ROUTER}' THEN 'router'
          WHEN he.contract_id IN ({lit(SOROSWAP_AGGREGATORS)}) THEN 'aggregator' ELSE 'pair' END"""
@@ -352,11 +360,34 @@ normalized AS (
   FROM pivoted p
   WHERE p.kind = 'pair' AND p.action IN ('swap', 'deposit', 'withdraw')
     AND p.tx_hash NOT IN (SELECT tx_hash FROM routed_txs)
+),
+sdex_txs AS (
+  SELECT id AS transaction_id, lower(to_hex(transaction_hash)) AS tx_hash, account
+  FROM stellar.history_transactions
+  WHERE {win('closed_at_date')} AND successful = TRUE AND memo LIKE 'SoroswapAggregator%'
+),
+sdex AS (
+  SELECT o.closed_at, t.tx_hash, t.account, o."to" AS recipient,
+    CASE WHEN o.source_asset_type = 'native' THEN 'native' ELSE o.source_asset_code || ':' || o.source_asset_issuer END AS token_a,
+    o.source_amount AS amount_a,
+    CASE WHEN o.asset_type = 'native' THEN 'native' ELSE o.asset_code || ':' || o.asset_issuer END AS token_b,
+    o.amount AS amount_b
+  FROM stellar.history_operations o
+  JOIN sdex_txs t ON t.transaction_id = o.transaction_id
+  WHERE {win('o.closed_at_date')} AND o.type_string IN ('path_payment_strict_send', 'path_payment_strict_receive')
 )
 SELECT 'soroswap' AS protocol, contract_id, closed_at, tx_hash, user_address, action, role, pool,
   token_a, CAST(amount_a_raw * DECIMAL '0.0000001' AS DECIMAL(38,7)) AS amount_a,
   token_b, CAST(amount_b_raw * DECIMAL '0.0000001' AS DECIMAL(38,7)) AS amount_b
-FROM normalized"""
+FROM normalized
+UNION ALL
+SELECT 'soroswap', NULL, closed_at, tx_hash, account, 'aggregator_sdex_swap', 'aggregator_user', NULL,
+  token_a, CAST(amount_a AS DECIMAL(38,7)), token_b, CAST(amount_b AS DECIMAL(38,7))
+FROM sdex
+UNION ALL
+SELECT 'soroswap', NULL, closed_at, tx_hash, recipient, 'aggregator_sdex_recipient', 'aggregator_user', NULL,
+  token_a, NULL, token_b, NULL
+FROM sdex WHERE recipient <> account"""
 
 
 def phoenix(win):
