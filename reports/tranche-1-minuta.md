@@ -41,7 +41,7 @@ Agregado fuera de lo pedido: tabla de integridad (concentración de la actividad
    |---|---|---|
    | Blend | eventos de 27 pools y 2 backstops | `from` del evento; en liquidaciones, quien llena la subasta |
    | Aquarius | eventos de 3 routers y 431 pools | usuario del evento del router; en trades directos al pool, quien llama; en depósitos directos (el evento no trae usuario), la cuenta que firma la operación |
-   | Soroswap | router, 10 versiones del aggregator y 214 pares | campo `to` de cada evento; los pares solo cuentan si la transacción no pasó por router ni aggregator |
+   | Soroswap | router, 10 versiones del aggregator y 214 pares; aggregator por el SDEX (transacciones con memo `SoroswapAggregator-<apiUser>` y sus path payments) | campo `to` de cada evento; los pares solo cuentan si la transacción no pasó por router ni aggregator. Por el SDEX: la cuenta que firma la transacción y, si es distinta, el receptor del path payment |
    | Phoenix | eventos de 14 pools | `sender` de cada evento |
    | FxDAO | operaciones a vaults y locking pool | cuenta que invoca |
    | Etherfuse | pagos, ofertas y trades del issuer (asset clásico) | emisor y receptor de pagos; ambas contrapartes de cada trade |
@@ -143,11 +143,17 @@ cadena.
 | `cohort_partition_weekly` / `_monthly` | nuevos + recurrentes = activas, y G + C = activas |
 
 Salud al 2026-09-22 (direcciones observadas desde 2024-02-01): Blend 40.382, Aquarius 30.183,
-Etherfuse 6.548, Phoenix 5.704, Soroswap 2.652, FxDAO 119. Los 6 en estado OK, última
+Etherfuse 6.548, Phoenix 5.704, Soroswap 4.192 (2.652 antes de sumar el SDEX), FxDAO 119. Los 6 en estado OK, última
 actividad el 2026-09-20 (FxDAO el 2026-09-14).
 
 ### Correcciones hechas durante la tranche
 
+- **Soroswap no contaba el aggregator por el SDEX.** Cuando la API del aggregator rutea por el
+  SDEX clásico, la operación no emite eventos Soroban y el usuario no aparecía en ningún
+  protocolo. Ahora se lee por el memo de la transacción, con el mismo criterio que el dashboard
+  de Soroswap en `paltalabs/dune-dashboards`. Desde el primer swap (2025-09-10): 62.038 swaps y
+  1.888 direcciones; 970 no aparecían en ningún protocolo. En los últimos 28 días Soroswap pasa
+  de 1.051 a 1.256 direcciones y de 35.692 a 61.883 acciones.
 - **Aquarius estaba subcontado.** Solo se leían los routers. En una muestra de 7 días, 736 de
   904 depósitos y 71.851 de 113.543 trades ocurrían directo en los pools. Ahora se leen los 431
   pools.
@@ -174,6 +180,9 @@ más volumen y TVL. Las dos cosas son ciertas a la vez. Últimos 28 días:
 | Phoenix | 1.342 | 0,1% | 43 | 3 | 31,2 |
 | FxDAO | 1 | 0,0% | 1 | 1 | 1,0 |
 | Todos | 1.253.628 | 100% | 4.793 | 73 | 261,6 |
+
+Tabla medida antes de sumar el SDEX. Con el SDEX, Soroswap tiene 61.883 acciones, 1.256
+direcciones y 529 que hacen el 90%; el resto de la lectura no cambia.
 
 Para comparar protocolos se usan las acciones y la concentración, no solo el WAU. El WAU
 responde cuánta gente usa un protocolo; unas pocas direcciones (bots de arbitraje y market
@@ -210,10 +219,11 @@ Créditos de Dune, engine medium.
 | Fase 1: capas vivas | 59,4 |
 | Fase 1: usuarios, métricas, integridad, validación y gráficos | 11,6 |
 | Fase 1: retiro del piloto, sondeos y lecturas | 26,7 |
-| **Total construcción** | **1.884,4** |
+| Soroswap: aggregator por el SDEX (sondeos, archive reconstruido, capas y refrescos) | 202,2 |
+| **Total construcción** | **2.086,6** |
 
 Detalle de archives: Aquarius 519,4 · Phoenix 331,8 · Etherfuse 117,9 · Blend 87,8 ·
-Soroswap 65,4 · FxDAO 11,9. El tope inicial era 500 cr; se subió a 2.000 con aprobación, para
+Soroswap 65,4 (150,5 al reconstruirlo con el SDEX) · FxDAO 11,9. El tope inicial era 500 cr; se subió a 2.000 con aprobación, para
 cerrar la tranche con historia completa.
 
 **Operación estimada: 1.300 a 1.500 cr/mes** (el presupuesto original era ~950). Las capas vivas

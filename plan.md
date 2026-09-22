@@ -186,6 +186,21 @@ subido de 2.000 a 2.500 (`pilot.json` → `cap_history`). Diseño y verificacion
 - [ ] ⚠️ Hallazgo del cuadre, afecta a los 7 protocolos: `CAST(raw * DECIMAL '0.0000001' AS DECIMAL(38,7))` redondea el séptimo decimal (los 116 esperados terminan en 0; error ≤ 5 unidades crudas por fila, 0,0000005 del token). Sin efecto en usuarios; irrelevante en USD. Decidir si se corrige solo hacia adelante o reconstruyendo archives (Sushi ~30 cr, todos ~1.135 cr)
 - [ ] El 2026-09-22 hubo 1.421 swaps de 551 wallets G en SushiSwap (3 a 7 wallets por día antes). Entra en la viva del 2026-09-23 y va a verse como un salto en WAU. Revisar si es una campaña o farming antes de publicar
 
+### Soroswap: aggregator por el SDEX ✅ 2026-09-22, 202,2 cr; acumulado del proyecto 2.172,6
+
+El plan inicial (2026-09-10) dejaba fuera de T1 los swaps del aggregator que salen por el SDEX
+clásico. No emiten eventos Soroban, así que esos usuarios no aparecían en ningún protocolo.
+Decisión del usuario, conversada con Esteban: se integran en Soroswap con el mismo criterio que
+`paltalabs/dune-dashboards` (queries 8395684 y 8395746). Detalle en `docs/modelo-de-datos.md`.
+
+- [x] Criterio: tx exitosa con memo `SoroswapAggregator%` y sus `path_payment_strict_send`/`_receive`. Cuenta la cuenta de la tx y, cuando es distinta, el receptor del path payment (fila sin montos). Rol `aggregator_user`, el mismo del aggregator Soroban. El memo es texto libre y se acepta como criterio. `api_user` no se guarda
+- [x] Sondeo 8808241, 30 días: 27.534 path payments, 226 direcciones, 138 ausentes de todas las capas; receptor distinto en 3 swaps. 4,9 cr
+- [x] Costo: 7 días de la capa con SDEX 5,16 cr contra 3,47 sin SDEX; el SDEX solo, 0,63 cr. Sondeos 11,2 cr
+- [x] Archive 8798502 reconstruido desde 2024-02-01: 150,5 cr, 633.608 filas (antes 590.915); incremental 2,5 cr. Viva 8666498: 10,5 cr, 40.510 filas
+- [x] `users`, métricas, integridad y validación refrescadas: 22,3 cr (`users_roles_weekly` midió 14,3; `users` 1,2 e `integrity` 1,1). Validación 9 checks en 0; salud 7 protocolos OK. Gráficos refrescados (0,65 cr, fuera de `pilot.json`)
+- [x] Resultado: primer swap por SDEX el 2025-09-10. 62.038 swaps y 155 filas de receptor distinto. 1.888 direcciones usaron la vía SDEX, 1.533 solo entran a Soroswap por ella y 970 no aparecían en ningún protocolo. Soroswap pasa de 2.652 a 4.192 direcciones observadas; en 28 días de 1.051 a 1.256 y de 35.692 a 61.883 acciones
+- [ ] Medir el costo de la viva de Soroswap en las próximas corridas diarias (la vía SDEX escanea `history_transactions` por memo)
+
 ## Entregable 2: solapamiento de usuarios (Tranche 2, USD 3.333)
 
 Sale de `result_scf_activity` sin escanear nada nuevo: matriz protocolo × protocolo de usuarios
@@ -211,8 +226,8 @@ un protocolo y deposita en otro dentro de una ventana. Todo desde `result_scf_ac
 - **Usuarios = direcciones.** Un contrato que opera (bot, vault de DeFindex, el aggregator) cuenta
   como usuario del protocolo que toca. Se muestra separado de las wallets G para no inflar.
 - **Soroswap.** Los usuarios salen de los eventos de los pares (cubre router y llamadas directas)
-  más el aggregator. Los usuarios del aggregator por el canal SDEX (memo) quedan fuera de T1;
-  están medidos en `dune-dashboards` si hace falta sumarlos.
+  más el aggregator. Desde 2026-09-22 también los del aggregator por el canal SDEX (memo
+  `SoroswapAggregator%`); el plan original los dejaba fuera de T1.
 - **FxDAO** está casi inactivo (decenas de operaciones por mes). Se incluye igual y se dice.
 - **Etherfuse** no es un protocolo Soroban: se mide como asset clásico (path payments, trades,
   redeems al issuer).

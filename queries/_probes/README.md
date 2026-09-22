@@ -32,3 +32,14 @@ SushiSwap, 2026-09-22 (el SQL quedó en cada query de Dune, temporal):
 | [8807737](https://dune.com/queries/8807737) | Swaps por día: 551 wallets G el 2026-09-22 contra 3 a 7 los días previos | 0,79 |
 | [8808197](https://dune.com/queries/8808197) | Chequeo 2: crudo contra capa en 3 días, 0 diferencias | 0,29 |
 | [8808205](https://dune.com/queries/8808205) | Chequeo 3: cuadre de saldos de los 58 pools contra `bline`, 58 de 58 dentro del redondeo | 1,10 |
+
+Soroswap, aggregator por el SDEX, 2026-09-22 (temporales; el primero espejado en este directorio):
+
+| Query | Qué probó | Costo |
+|---|---|---|
+| [8808241](https://dune.com/queries/8808241) | 30 días de memo `SoroswapAggregator%`: 27.534 path payments, 226 direcciones, 138 ausentes de todas las capas | 4,90 |
+| [8808249](https://dune.com/queries/8808249) | Capa Soroswap con SDEX, 1 día (2026-09-20): 890 filas SDEX | 1,56 |
+| [8808262](https://dune.com/queries/8808262) | Capa Soroswap con SDEX, 7 días | 5,16 |
+| [8808292](https://dune.com/queries/8808292) | Capa Soroswap sin SDEX, mismos 7 días | 3,47 |
+| [8808281](https://dune.com/queries/8808281) | Solo la vía SDEX, 7 días (transacciones + operaciones) | 0,63 |
+| [8808425](https://dune.com/queries/8808425) … [8808431](https://dune.com/queries/8808431) | Lectura de validación, salud, integridad y aporte del SDEX tras el rebuild | 0,31 |
