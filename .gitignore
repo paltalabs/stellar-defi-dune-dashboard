@@ -1,3 +1,4 @@
 .env
 logs/
 scripts/__pycache__/
+graphify-out/
