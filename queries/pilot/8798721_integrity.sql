@@ -1,5 +1,5 @@
 -- Query: https://dune.com/queries/8798721
--- Matview: dune.paltalabs.result_scf_integrity   cron: 0 9 * * *
+-- Matview: dune.paltalabs.result_scf_integrity   cron: 0 9 * * 1
 -- Última ejecución: 01M34ZZ1NKVF1C4WG5EJ872RT8
 -- Costo: 1.144 cr; filas: 8; engine medium
 -- Activity concentration per protocol vs all protocols, last 28 complete days (UTC).
