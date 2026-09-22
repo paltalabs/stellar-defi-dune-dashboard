@@ -235,7 +235,8 @@ def main():
     if args.command in ('activity-archive', 'activity-live'):
         kind = args.command.split('-')[1]
         key = f"{args.target}_activity{'_archive' if kind == 'archive' else ''}"
-        if key not in state['pieces'] and kind == 'live':
+        # Protocols from step 1 reuse their query; one added later (sushiswap) gets a new one.
+        if key not in state['pieces'] and kind == 'live' and list((ROOT / 'queries' / args.target).glob('*_activity.sql')):
             adopt_step1_query(client, state, args.target, key)
         name = f"SCF35 · {args.target.title()} activity{' archive' if kind == 'archive' else ''}"
         piece = sync_query(client, state, key, activity_sql.layer(args.target, kind), name)

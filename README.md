@@ -1,7 +1,7 @@
 # Stellar DeFi Dune Dashboards
 
 Dashboards públicos en Dune con datos on-chain verificables de los protocolos DeFi de Stellar:
-Blend, FxDAO, Soroswap, Aquarius, Phoenix y Etherfuse. Financiado por SCF #35
+Blend, FxDAO, Soroswap, Aquarius, Phoenix, Etherfuse y SushiSwap. Financiado por SCF #35
 ([submission](scf/submission-scf35.md), [página del proyecto](https://communityfund.stellar.org/project/stellar-defi-dune-dashboards-xn9)).
 
 Dashboard: https://dune.com/paltalabs/stellar-defi, privado hasta revisión (piloto del Entregable 1).

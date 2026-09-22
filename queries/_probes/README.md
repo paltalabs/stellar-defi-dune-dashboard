@@ -15,3 +15,18 @@ matview. Se listan para poder volver a mirarlas; el SQL final vive en `queries/<
 | [8666420](https://dune.com/queries/8666420) | Pools y eventos Phoenix, 30 días | 1,88 |
 | [8666431](https://dune.com/queries/8666431) | FxDAO por función, 180 días | 1,24 |
 | [8666440](https://dune.com/queries/8666440) | Etherfuse ops clásicas y trades, 30 días | 0,43 |
+
+SushiSwap, 2026-09-22 (el SQL quedó en cada query de Dune, temporal):
+
+| Query | Qué probó | Costo |
+|---|---|---|
+| [8807444](https://dune.com/queries/8807444) | Storage del factory: 116 entradas `GetPool`, desde 2026-03-02 | 0,17 |
+| [8807449](https://dune.com/queries/8807449) | Los 58 pools (cruzados 1:1 con stellar.expert) | 0,08 |
+| [8807456](https://dune.com/queries/8807456) | Formas de evento de factory, router y pools, 7 días | 0,88 |
+| [8807465](https://dune.com/queries/8807465) | Position manager y quién firma los swaps, 30 días | 5,70 |
+| [8807515](https://dune.com/queries/8807515) | token0 = token de bytes menores, 58 de 58 | 0,77 |
+| [8807521](https://dune.com/queries/8807521) | Signo de los montos contra el router, 304 de 304 | 2,13 |
+| [8807571](https://dune.com/queries/8807571) | Capa normalizada, 7 días (mostró los `burn` sin usuario) | 2,39 |
+| [8807578](https://dune.com/queries/8807578) | Firmante de los LP: coincide en mint, no existe para la mayoría | 7,31 |
+| [8807730](https://dune.com/queries/8807730) | `sender` por regex y por JSON, 0 diferencias | 1,17 |
+| [8807737](https://dune.com/queries/8807737) | Swaps por día: 551 wallets G el 2026-09-22 contra 3 a 7 los días previos | 0,79 |

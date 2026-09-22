@@ -10,8 +10,9 @@ Index:    `paltalabs/context` → `CLAUDE.md`, `REPOS.yml`
 
 ## What this is
 
-Six DeFi protocols on Stellar (Blend, FxDAO, Soroswap, Aquarius, Phoenix, Etherfuse), one public
-Dune dashboard, four deliverables funded by SCF #35 (`scf/submission-scf35.md`). The plan and the
+Seven DeFi protocols on Stellar (Blend, FxDAO, Soroswap, Aquarius, Phoenix, Etherfuse, SushiSwap),
+one public Dune dashboard, four deliverables funded by SCF #35 (`scf/submission-scf35.md`).
+SushiSwap was added on 2026-09-22, after the submission, and is treated like the other six. The plan and the
 credit budget are in `plan.md`. The protocol contract registry is `protocols.yml`.
 
 ## Design rules, decided 2026-09-10

@@ -1,8 +1,8 @@
 -- Query: https://dune.com/queries/8797598
 -- Matview: None   cron: None
--- Última ejecución: 01M32WXAGND5RVCG12Q9KBNRQ9
--- Costo: 0.035 cr; filas: 132; engine medium
--- Chart source: unique addresses across all six protocols, complete calendar weeks.
+-- Última ejecución: 01M34X0HAV9M56G8SW7E1SY1S0
+-- Costo: 0.036 cr; filas: 132; engine medium
+-- Chart source: unique addresses across all protocols, complete calendar weeks.
 SELECT CAST(date_trunc('week', activity_date) AS DATE) AS period_start,
        COUNT(DISTINCT user_address) AS active_addresses,
        COUNT(DISTINCT CASE WHEN user_address LIKE 'G%' THEN user_address END) AS g_addresses,

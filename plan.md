@@ -166,6 +166,23 @@ registro ~16 cr/mes; archives: agregado mensual (Aquarius ~50 cr) más las copia
 medir; gráficos ~15 cr/mes. **Total estimado ~1.300 a 1.500 cr/mes**, por encima de los ~950 del
 presupuesto original; decidir con Esteban si se optimiza Aquarius o se acepta.
 
+### SushiSwap, séptimo protocolo ✅ 2026-09-22, 84,5 cr; acumulado del proyecto 1.968,9
+
+No está en la submission. Decisión del usuario: se integra igual que los otros seis, en todos
+los gráficos y en los totales del ecosistema, sin nota en el dashboard. Tope de construcción
+subido de 2.000 a 2.500 (`pilot.json` → `cap_history`). Diseño y verificaciones en
+`docs/modelo-de-datos.md`; contratos en `protocols.yml`; sondeos en `queries/_probes/README.md`.
+
+- [x] Factory `CD3KRKGD…` desde 2026-03-02: 58 pools en el storage (`GetPool`), iguales 1:1 a
+      stellar.expert, la fuente de `backfill-sushi-pools.ts` de grapho. Sondeos: 21,5 cr
+- [x] Registro `result_scf_contracts` con la rama de SushiSwap, 744 contratos: 4,3 cr
+- [x] Archive 8807591 `result_scf_sushiswap_activity_archive` desde 2026-03-01: 29,4 cr, 81.753 filas; incremental 1,1 cr
+- [x] Viva 8807612 `result_scf_sushiswap_activity`, cron `0 5 * * *`: 2,7 cr, 7.652 filas
+- [x] `users`, métricas, integridad y validación reconstruidas con las 14 capas: 25,3 cr. Validación 9 checks en 0; salud: 7 protocolos OK, SushiSwap 288 direcciones (37 C) desde 2026-03-01
+- [x] Gráficos refrescados (0,6 cr) y texto del dashboard con SushiSwap (sigue privado)
+- [ ] ⚠️ Medir el costo de las corridas de mañana: `users` midió 5,8 cr e `integrity` 11,5 cr en este refresco, contra ~1,1 cr cada una antes. Si se repite, son ~450 cr/mes más y hay que revisar la lectura de las 14 capas
+- [ ] El 2026-09-22 hubo 1.421 swaps de 551 wallets G en SushiSwap (3 a 7 wallets por día antes). Entra en la viva del 2026-09-23 y va a verse como un salto en WAU. Revisar si es una campaña o farming antes de publicar
+
 ## Entregable 2: solapamiento de usuarios (Tranche 2, USD 3.333)
 
 Sale de `result_scf_activity` sin escanear nada nuevo: matriz protocolo × protocolo de usuarios

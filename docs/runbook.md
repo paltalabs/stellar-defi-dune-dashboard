@@ -10,8 +10,8 @@ Ids, ejecuciones y costos de cada pieza están en `pilot.json`; el SQL lo genera
 ```
 registro:
   SCF35 · contract registry            result_scf_contracts              lunes 02:00   incremental, se lee a sí mismo
-por protocolo (blend, aquarius, soroswap, phoenix, fxdao, etherfuse):
-  SCF35 · <P> activity archive         result_scf_<p>_activity_archive   lunes 03:00   historia desde 2024-02-01 hasta el 1 del mes
+por protocolo (blend, aquarius, soroswap, phoenix, fxdao, etherfuse, sushiswap):
+  SCF35 · <P> activity archive         result_scf_<p>_activity_archive   lunes 03:00   historia desde 2024-02-01 (sushiswap desde 2026-03-01) hasta el 1 del mes
   SCF35 · <P> activity                 result_scf_<p>_activity           diario 05:00  desde el covered_until del archive hasta ayer
 capa común y métricas:
   SCF35 · users                        result_scf_users                  diario 08:00  grano diario (protocolo, día, dirección, rol) desde las 12 capas
@@ -67,6 +67,7 @@ Orden exacto (cada paso espera la primera ejecución del anterior):
 
 1. `python3 scripts/deploy_pilot.py registry` crea el registro (primer build 78,9 cr) y
    `export-registry` escribe `data/contracts.csv`. Después, `registry` otra vez deja el SQL
+   incremental. La rama de SushiSwap escanea siempre desde 2026-03-01 (0,08 cr), también en el
    incremental.
 2. Por protocolo: `test-activity <p> <día>` (1 día, barato), `activity-archive <p>` (build
    completo), `activity-archive-incremental <p>` (SQL que se lee a sí mismo), `activity-live <p>`.
@@ -86,6 +87,21 @@ costo: capas de actividad en `queries/<protocolo>/<id>_activity[_archive].sql`, 
 detiene si alguien la cambió fuera del repo. `getDuneQuery` se lee por REST
 (`GET /api/v1/query/{id}`): la llave actual funciona (verificado 2026-09-21) y el MCP devolvía
 cuerpos vacíos.
+
+## Agregar un protocolo
+
+Así se agregó SushiSwap el 2026-09-22 (84,5 cr en total, detalle en `plan.md`):
+
+1. Sondeos temporales `[SCF35 probe]`: storage de la factory, formas de evento, de dónde sale el
+   usuario. Cruzar la lista de pools con una fuente externa (stellar.expert).
+2. Rama del protocolo en `registry_scan` y fuente en `activity_sql.py` (`SOURCES`, `PROTOCOLS` y,
+   si el protocolo es posterior a 2024, su inicio en `HISTORY_STARTS`).
+3. `registry` (actualiza el SQL, refresca y exporta `data/contracts.csv`).
+4. `activity-archive <p>`, `activity-archive-incremental <p>`, `activity-live <p>` (una viva
+   nueva crea su query; solo los protocolos del paso 1 reusan la suya).
+5. `metric users`, las métricas, `integrity` y `metric users_validation` (el check
+   `missing_protocol_metadata` cuenta `PROTOCOLS`). Después `refresh-charts` y el texto del
+   dashboard.
 
 ## Si algo se rompe
 
