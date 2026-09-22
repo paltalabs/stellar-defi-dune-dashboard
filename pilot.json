@@ -3998,6 +3998,158 @@
         "executionCostCredits": "0.026"
       },
       "state": "COMPLETED"
+    },
+    {
+      "key": "probe_check2_days",
+      "query_id": 8808190,
+      "execution_id": "01M34YXDWKZ1D7T6WH9C5SZTD9",
+      "credits": 0.046,
+      "state": "COMPLETED",
+      "metadata": {
+        "columns": [
+          {
+            "name": "m",
+            "type": "bigint"
+          },
+          {
+            "name": "day",
+            "type": "date"
+          },
+          {
+            "name": "max_rows",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 3,
+        "executionCostCredits": "0.046"
+      }
+    },
+    {
+      "key": "probe_check3_shape",
+      "query_id": 8808192,
+      "execution_id": "01M34YXM1NDMYRRJQK8H3AJYX1",
+      "credits": 0.081,
+      "state": "COMPLETED",
+      "metadata": {
+        "columns": [
+          {
+            "name": "contract_id",
+            "type": "varchar"
+          },
+          {
+            "name": "closed_at",
+            "type": "timestamp(3) with time zone"
+          },
+          {
+            "name": "val_decoded",
+            "type": "varchar"
+          }
+        ],
+        "totalRowCount": 1,
+        "executionCostCredits": "0.081"
+      }
+    },
+    {
+      "key": "probe_check2_reconcile",
+      "query_id": 8808197,
+      "execution_id": "01M34YY9612KTFD5DB4EPCN7EZ",
+      "credits": 0.29,
+      "state": "COMPLETED",
+      "metadata": {
+        "columns": [
+          {
+            "name": "day",
+            "type": "date"
+          },
+          {
+            "name": "event_type",
+            "type": "varchar"
+          },
+          {
+            "name": "layer",
+            "type": "varchar"
+          },
+          {
+            "name": "raw_events",
+            "type": "bigint"
+          },
+          {
+            "name": "raw_with_user",
+            "type": "bigint"
+          },
+          {
+            "name": "layer_rows",
+            "type": "bigint"
+          },
+          {
+            "name": "diff",
+            "type": "bigint"
+          }
+        ],
+        "totalRowCount": 11,
+        "executionCostCredits": "0.29"
+      }
+    },
+    {
+      "key": "probe_check3_balances",
+      "query_id": 8808205,
+      "execution_id": "01M34YZD4HZ8QS7TAKK1JM96SG",
+      "credits": 1.097,
+      "state": "COMPLETED",
+      "metadata": {
+        "columns": [
+          {
+            "name": "pool",
+            "type": "varchar(56)"
+          },
+          {
+            "name": "layer_rows",
+            "type": "bigint"
+          },
+          {
+            "name": "as_of",
+            "type": "timestamp(3) with time zone"
+          },
+          {
+            "name": "expected0",
+            "type": "varchar"
+          },
+          {
+            "name": "bline0",
+            "type": "varchar"
+          },
+          {
+            "name": "diff0",
+            "type": "varchar"
+          },
+          {
+            "name": "expected1",
+            "type": "varchar"
+          },
+          {
+            "name": "bline1",
+            "type": "varchar"
+          },
+          {
+            "name": "diff1",
+            "type": "varchar"
+          },
+          {
+            "name": "pfee0",
+            "type": "varchar"
+          },
+          {
+            "name": "pfee1",
+            "type": "varchar"
+          },
+          {
+            "name": "status",
+            "type": "varchar(13)"
+          }
+        ],
+        "totalRowCount": 58,
+        "executionCostCredits": "1.097"
+      }
     }
   ],
   "visualizations": {

@@ -30,3 +30,5 @@ SushiSwap, 2026-09-22 (el SQL quedó en cada query de Dune, temporal):
 | [8807578](https://dune.com/queries/8807578) | Firmante de los LP: coincide en mint, no existe para la mayoría | 7,31 |
 | [8807730](https://dune.com/queries/8807730) | `sender` por regex y por JSON, 0 diferencias | 1,17 |
 | [8807737](https://dune.com/queries/8807737) | Swaps por día: 551 wallets G el 2026-09-22 contra 3 a 7 los días previos | 0,79 |
+| [8808197](https://dune.com/queries/8808197) | Chequeo 2: crudo contra capa en 3 días, 0 diferencias | 0,29 |
+| [8808205](https://dune.com/queries/8808205) | Chequeo 3: cuadre de saldos de los 58 pools contra `bline`, 58 de 58 dentro del redondeo | 1,10 |
