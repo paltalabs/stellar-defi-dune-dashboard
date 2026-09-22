@@ -71,35 +71,37 @@ Registro con ids y costos: `queries.yml`.
 - [x] FxDAO 8666504: operaciones a vaults y locking pool. 0,1 cr, 0 filas en 45 días (join verificado a 150 días: 17 filas)
 - [x] Etherfuse 8666506: path payments, payments, offers y trades del issuer. 6,7 cr, 895.391 filas (bots de market making)
 
-### Paso 2: archives, uno por día (estimado 240 cr) → hecho en la Fase 1 (abajo), 1.135,3 cr
+### Paso 2: archives, uno por día (estimado 240 cr) → reemplazado por la Fase 1 (abajo), 1.135,3 cr
+
+Lo que contemplaba este paso, sin casillas porque se ejecutó con el diseño de la Fase 1:
 
 Misma query sin el filtro de ventana, `is_temp: false`, matview `result_scf_<p>_activity_archive`
 con cron `0 3 1 * *`. Se crea, se espera la primera ejecución, se anota el costo real.
 
-- [ ] Etherfuse (operaciones, el más barato: prueba el patrón)
-- [ ] FxDAO
-- [ ] Phoenix
-- [ ] Blend
-- [ ] Soroswap
-- [ ] Aquarius (el de más filas)
+- Etherfuse (operaciones, el más barato: prueba el patrón)
+- FxDAO
+- Phoenix
+- Blend
+- Soroswap
+- Aquarius (el de más filas)
 
-### Paso 3: capa viva apuntada al archive y unión (estimado 20 cr) → hecho en la Fase 1; la unión no se materializa, `result_scf_users` lee las 12 capas
+### Paso 3: capa viva apuntada al archive y unión (estimado 20 cr) → reemplazado por la Fase 1; la unión no se materializa, `result_scf_users` lee las 14 capas
 
-- [ ] Reescribir cada query viva: `closed_at > (SELECT MAX(closed_at) FROM archive)` más la poda
+- Reescribir cada query viva: `closed_at > (SELECT MAX(closed_at) FROM archive)` más la poda
       `closed_at_date >= current_date - 75 días`. Matview `result_scf_<p>_activity`, cron `0 5 * * *`.
-- [ ] `SCF35 · activity (all protocols)`: UNION ALL de las 12 matviews. Matview `result_scf_activity`, cron `0 6 * * *`.
+- `SCF35 · activity (all protocols)`: UNION ALL de las 12 matviews. Matview `result_scf_activity`, cron `0 6 * * *`.
 
-### Paso 4: métricas y dashboard (estimado 30 cr) → hecho en la Fase 1, salvo publicar y el reporte
+### Paso 4: métricas y dashboard (estimado 30 cr) → reemplazado por la Fase 1, salvo publicar y el reporte, que siguen pendientes en la Fase 1
 
 Todas leen solo `result_scf_activity`. Cada una con matview y cron `30 6 * * *`.
 
-- [ ] WAU y MAU por protocolo (wallets G y contratos C por separado)
-- [ ] WAU y MAU por rol, por protocolo
-- [ ] Nuevos vs recurrentes por semana y por mes, con primera aparición por (protocolo, usuario)
-- [ ] Crecimiento semana a semana y mes a mes
-- [ ] Salud: último evento por protocolo y edad del dato
-- [ ] Dashboard público `dune.com/paltalabs/stellar-defi` con texto de metodología y links a este repo
-- [ ] Reporte de la tranche: qué se entregó, links, costos, y lo que quedó fuera
+- WAU y MAU por protocolo (wallets G y contratos C por separado)
+- WAU y MAU por rol, por protocolo
+- Nuevos vs recurrentes por semana y por mes, con primera aparición por (protocolo, usuario)
+- Crecimiento semana a semana y mes a mes
+- Salud: último evento por protocolo y edad del dato
+- Dashboard público `dune.com/paltalabs/stellar-defi` con texto de metodología y links a este repo
+- Reporte de la tranche: qué se entregó, links, costos, y lo que quedó fuera
 
 ### Piloto diario de usuarios (2026-09-21), 239,5 cr; acumulado del proyecto 343,0 de 500
 
@@ -126,7 +128,7 @@ más archives sin aprobación.
 - [x] WAU y MAU del ecosistema (únicas entre protocolos, G y C por separado): queries 8797598 y 8797599, visualizaciones 12827594 y 12827595, agregadas al dashboard (privado)
 - [x] `getDuneQuery` por REST (`GET /api/v1/query/{id}`): la llave del `.env` funciona y el MCP devolvía cuerpos vacíos
 - [x] Reemplazado: la GitHub Action se quitó el 2026-09-22 a favor del schedule de Dune
-- [ ] El puente crece un día por día (~4,7 cr más por cada día de ventana, Aquarius la mitad). Sirve una o dos semanas, no más. Lo reemplaza la Fase 1
+- [x] El puente crecía un día por día (~4,7 cr más por cada día de ventana, Aquarius la mitad). Reemplazado por la Fase 1 el 2026-09-22
 
 Acumulado del proyecto al cierre de la Fase 0: **568,5 cr** (tope 600).
 
@@ -156,7 +158,7 @@ tranche 1"). Cada capa en el esquema normalizado de `docs/modelo-de-datos.md`, g
 - [x] Piloto retirado: las 6 `users_live` sin cron (quitar el cron dispara un refresco: 17,3 cr)
 - [x] Dashboard privado con 12 gráficos, historia completa y textos actualizados. Gráficos con schedule de Dune (excepción a la regla 1, `docs/runbook.md`)
 - [ ] **Usuario:** programar en la UI de Dune las 8 queries de gráficos a las 10:30 UTC (lista en el runbook)
-- [ ] **Usuario:** revisar y publicar el dashboard; commit de este trabajo
+- [ ] **Usuario:** revisar y publicar el dashboard; push de la rama `tranche-1`
 - [ ] Medir el primer lunes (2026-09-28) cuánto cuesta la copia semanal de los archives grandes (Etherfuse 8,4 M filas, Aquarius 4,8 M) y el primer lunes de octubre (2026-10-05) el agregado del mes
 - [ ] Optimizar la viva de FxDAO (9 cr por 2 filas: el join con `history_transactions` escanea todas las transacciones) y la de Aquarius
 
