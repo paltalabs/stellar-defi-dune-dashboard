@@ -298,7 +298,11 @@ FROM source GROUP BY 1,2,3 ORDER BY 1,2,3"""
                  'chart_health': 'data coverage and health',
                  'chart_ecosystem_weekly': 'weekly active addresses, all protocols',
                  'chart_ecosystem_monthly': 'monthly active addresses, all protocols',
-                 'chart_integrity': 'activity concentration by protocol'}
+                 'chart_integrity': 'activity concentration by protocol',
+                 'chart_overlap': 'protocol overlap',
+                 'chart_protocol_count': 'protocols per address, monthly',
+                 'chart_first_protocol': 'entry protocol of new addresses',
+                 'chart_journeys': 'first to second protocol journeys'}
         piece = sync_query(client, state, key, pilot_sql.CHARTS[key](), 'SCF35 · ' + names[key])
         run(client, state, key, piece)
     else:
@@ -308,9 +312,15 @@ FROM source GROUP BY 1,2,3 ORDER BY 1,2,3"""
                      'users_monthly': lambda: pilot_sql.periods('month'),
                      'users_roles_weekly': lambda: pilot_sql.periods('week', True),
                      'users_roles_monthly': lambda: pilot_sql.periods('month', True),
-                     'users_validation': pilot_sql.validation}
+                     'users_validation': pilot_sql.validation,
+                     'overlap_matrix': pilot_sql.overlap_matrix,
+                     'protocol_count': pilot_sql.protocol_count,
+                     'first_protocol': pilot_sql.first_protocol,
+                     'journeys': pilot_sql.journeys}
         key = args.target
-        names = {'integrity': 'activity concentration (data integrity)'}
+        names = {'integrity': 'activity concentration (data integrity)',
+                 'overlap_matrix': 'protocol overlap matrix', 'protocol_count': 'protocols per address',
+                 'first_protocol': 'entry protocol', 'journeys': 'protocol journeys'}
         piece = sync_query(client, state, key, functions[key](), 'SCF35 · ' + names.get(key, key.replace('_', ' ')))
         cron = {'users': '0 8 * * *', 'users_validation': '0 10 * * *'}.get(key, '0 9 * * *')
         run(client, state, key, piece, 'result_scf_' + key, cron)

@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796540
 -- Matview: dune.paltalabs.result_scf_users_validation   cron: 0 10 * * *
--- Última ejecución: 01M34ZZAPRNPFQ0DSHFJDW7MFW
--- Costo: 1.052 cr; filas: 9; engine medium
+-- Última ejecución: 01M357MV1QEJCECG3W4Q4ST488
+-- Costo: 1.076 cr; filas: 11; engine medium
 WITH users AS (SELECT * FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity'),
 duplicate_keys AS (
   SELECT protocol, activity_date, user_address, role, COUNT(*) AS n
@@ -33,3 +33,14 @@ WHERE new_observed + returning_observed <> active_addresses OR g_addresses + c_a
 UNION ALL
 SELECT 'cohort_partition_monthly', COUNT(*) FROM dune.paltalabs.result_scf_users_monthly
 WHERE new_observed + returning_observed <> active_addresses OR g_addresses + c_addresses <> active_addresses
+UNION ALL
+SELECT 'overlap_diagonal_vs_health', COUNT(*) FROM dune.paltalabs.result_scf_overlap_matrix m
+JOIN dune.paltalabs.result_scf_users_health h ON h.protocol = m.protocol_a
+WHERE m.window_name = 'all_time' AND m.protocol_a = m.protocol_b AND m.shared_addresses <> h.observed_addresses
+UNION ALL
+SELECT 'overlap_totals', ABS((SELECT COUNT(DISTINCT user_address) FROM users)
+  - (SELECT SUM(new_ecosystem_addresses) FROM dune.paltalabs.result_scf_first_protocol))
+  + ABS((SELECT COUNT(DISTINCT user_address) FROM users)
+  - (SELECT SUM(addresses) FROM dune.paltalabs.result_scf_protocol_count WHERE period_kind = 'all_time'))
+  + ABS((SELECT COUNT(DISTINCT user_address) FROM users)
+  - (SELECT SUM(addresses) FROM dune.paltalabs.result_scf_journeys))

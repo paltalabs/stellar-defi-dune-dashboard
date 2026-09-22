@@ -202,10 +202,33 @@ Decisión del usuario, conversada con Esteban: se integran en Soroswap con el mi
 - [x] Resultado: primer swap por SDEX el 2025-09-10. 62.038 swaps y 155 filas de receptor distinto. 1.888 direcciones usaron la vía SDEX, 1.533 solo entran a Soroswap por ella y 970 no aparecían en ningún protocolo. Soroswap pasa de 2.652 a 4.192 direcciones observadas; en 28 días de 1.051 a 1.256 y de 35.692 a 61.883 acciones
 - [x] Costo de operación de la vía SDEX, medido A/B sobre la misma ventana (1 al 21 de septiembre): viva de Soroswap 7,80 cr sin SDEX (8808903) contra 8,75 con SDEX (8808914), +0,95 cr por corrida. La vía sola: 0,86 cr en esa ventana (8808925) y 1,42 cr en un mes completo (8808926, el peor caso de la viva). Recurrente: ~0,1 a 1,4 cr/día, **~25 cr/mes** más, más ~1,4 cr del agregado mensual del archive. Sondeos: 18,8 cr
 
-## Entregable 2: solapamiento de usuarios (Tranche 2, USD 3.333)
+## Tranche 2: decisiones del 2026-09-22
 
-Sale de `result_scf_activity` sin escanear nada nuevo: matriz protocolo × protocolo de usuarios
-compartidos, primer protocolo de cada wallet, viajes entre protocolos. Costo esperado < 30 cr.
+Plan de la T2 aprobado por el usuario. Rama `tranche-2`. Tope de construcción subido de 2.500 a
+**3.500** (`pilot.json` → `cap_history`); una ejecución estimada en más de 80 cr se consulta antes.
+LP = solo AMMs (rol `lp` de Soroswap, Aquarius, Phoenix, SushiSwap y locking pool de FxDAO;
+Blend queda fuera). Precios propios: SDEX (`stellar.history_trades`) más los swaps Soroban de las
+capas. Pendientes de la T1 que bloquean la entrega: schedule de los gráficos en la UI, revisar el
+salto de SushiSwap y medir `users` del 2026-09-23, publicar el dashboard.
+
+## Entregable 2: solapamiento de usuarios (Tranche 2, USD 3.333) ✅ 2026-09-22, 12,6 cr; acumulado del proyecto 2.216,8
+
+Sale de `result_scf_users` (grano diario protocolo, día, dirección, rol) sin escanear nada
+crudo. SQL en `scripts/pilot_sql.py`, desplegado con `deploy_pilot.py metric <clave>`, cron 09:00.
+
+- [x] `result_scf_overlap_matrix` 8810202: protocolo × protocolo, toda la historia y últimos 90/28 días, G por separado. 1,08 cr, 123 filas
+- [x] `result_scf_protocol_count` 8810203: direcciones por cantidad de protocolos usados (1, 2, 3, 4+), histórico, 28 días y por mes. 1,24 cr, 119 filas
+- [x] `result_scf_first_protocol` 8810205: protocolo de entrada al ecosistema por mes (empate el primer día = `multiple`). **7,98 cr**, 177 filas: 8 veces las otras con los mismos datos; medir la corrida diaria del 2026-09-23 antes de optimizar
+- [x] `result_scf_journeys` 8810219: primer → segundo protocolo, mediana de días. 1,06 cr, 52 filas
+- [x] Validación con 2 checks nuevos (`overlap_diagonal_vs_health`, `overlap_totals`: first_protocol, protocol_count y journeys suman las direcciones únicas): 11 checks en 0. 1,08 cr
+- [x] Gráficos 8810227, 8810228, 8810230, 8810231 (0,13 cr) y 4 visualizaciones; sección "User overlap" agregada al dashboard (sigue privado)
+- [ ] **Usuario:** programar los 4 gráficos nuevos en la UI de Dune a las 10:30 UTC (runbook)
+
+Resultado al 2026-09-22: 78.376 direcciones; 90,3% usó un solo protocolo, 8,1% dos, 1,6% tres o
+más. Entrada: Blend 35.313, Aquarius 27.488, Etherfuse 6.122, Phoenix 4.877, Soroswap 2.616,
+`multiple` 1.755. Recorrido más frecuente: Aquarius → Blend (3.601 direcciones, mediana 7 días),
+luego Blend → Aquarius (608, 1 día) y Aquarius → Soroswap (555, 167 días). En toda la historia,
+5.546 direcciones usaron Blend y Aquarius.
 
 ## Entregable 3: actividad de LPs (Tranche 2, USD 5.000)
 

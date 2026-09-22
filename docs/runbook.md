@@ -18,6 +18,9 @@ capa común y métricas:
   SCF35 · users weekly / monthly / roles weekly / roles monthly / health, activity concentration
                                        result_scf_users_*                                diario 09:00
   SCF35 · activity concentration       result_scf_integrity              lunes 09:00   ventana de 28 días; semanal desde 2026-09-22
+solapamiento (Entregable 2, desde 2026-09-22):
+  SCF35 · protocol overlap matrix / protocols per address / entry protocol / protocol journeys
+                                       result_scf_overlap_matrix, _protocol_count, _first_protocol, _journeys   diario 09:00
   SCF35 · users validation             result_scf_users_validation       diario 10:00
 gráficos:
   queries SCF35 · ... que hacen SELECT sobre las matviews, con schedule de Dune a las 10:30 (ver abajo)
@@ -58,8 +61,12 @@ En cada query, `Schedule` → diario → 10:30 UTC → engine medium:
 | https://dune.com/queries/8796721 | WAU por rol |
 | https://dune.com/queries/8796722 | MAU por rol |
 | https://dune.com/queries/8798732 | Activity concentration by protocol (integridad) |
+| https://dune.com/queries/8810227 | Protocol overlap (Entregable 2) |
+| https://dune.com/queries/8810228 | Addresses by number of protocols used |
+| https://dune.com/queries/8810230 | New ecosystem addresses by entry protocol |
+| https://dune.com/queries/8810231 | User journeys, first to second protocol |
 
-Costo medido: unos 0,5 cr por corrida de las 8. `python3 scripts/deploy_pilot.py refresh-charts`
+Costo medido: unos 0,5 cr por corrida de las 8 de la T1; las 4 del solapamiento suman 0,13 cr. `python3 scripts/deploy_pilot.py refresh-charts`
 hace lo mismo por API si hace falta refrescarlas a mano.
 
 ## Reconstruir desde cero
@@ -73,7 +80,9 @@ Orden exacto (cada paso espera la primera ejecución del anterior):
 2. Por protocolo: `test-activity <p> <día>` (1 día, barato), `activity-archive <p>` (build
    completo), `activity-archive-incremental <p>` (SQL que se lee a sí mismo), `activity-live <p>`.
 3. `metric users`, luego `metric users_weekly`, `users_monthly`, `users_roles_weekly`,
-   `users_roles_monthly`, `users_health`, `integrity`, y al final `metric users_validation`.
+   `users_roles_monthly`, `users_health`, `integrity`, `overlap_matrix`, `protocol_count`,
+   `first_protocol`, `journeys`, y al final `metric users_validation` (sus checks de solapamiento
+   leen esas cuatro tablas).
 4. `chart <clave>` para cada gráfico, schedule en la UI (tabla de arriba), visualizaciones y
    dashboard (ids en `pilot.json` → `visualizations` y `dashboard_after_layout`).
 
