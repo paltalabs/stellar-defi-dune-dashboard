@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8798252
 -- Matview: dune.paltalabs.result_scf_contracts   cron: 0 2 * * 1
--- Última ejecución: 01M32SX3Z2ABHJ7Q1ERVCPV0ZF
--- Costo: 3.904 cr; filas: 686; engine medium
+-- Última ejecución: 01M34WDTE4C0YSZP8ZDHFAEP48
+-- Costo: 4.327 cr; filas: 744; engine medium
 -- Contract registry, incremental: previous snapshot of this matview + contracts seen in the last 14 days.
 WITH prev AS (SELECT protocol, kind, contract_id, token_a, token_b, first_seen FROM dune.paltalabs.result_scf_contracts),
 fresh AS (
@@ -37,6 +37,21 @@ WHERE he.contract_id IN ('CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6Q
     AND he.successful = TRUE AND he.in_successful_contract_call = TRUE
   AND he.topics_decoded LIKE '[{"symbol":"add_pool"}%'
   AND regexp_extract(he.data_decoded, '"address":"(C[A-Z2-7]{55})"', 1) IS NOT NULL
+GROUP BY 1, 2, 3
+UNION ALL
+-- SushiSwap: two GetPool entries per pool, one per token order. token_a is the pool's token0, the
+-- token with the lower address bytes (58 of 58 pools against their params.token0, 2026-09-22; string
+-- order fails on 3). Always scanned from the factory's start: 0,08 cr, so no incremental window.
+SELECT 'sushiswap', 'pool', json_extract_scalar(val_decoded, '$.address'),
+       MAX(CASE WHEN from_base32(json_extract_scalar(key_decoded, '$.vec[1].address')) < from_base32(json_extract_scalar(key_decoded, '$.vec[2].address'))
+                THEN json_extract_scalar(key_decoded, '$.vec[1].address') ELSE json_extract_scalar(key_decoded, '$.vec[2].address') END),
+       MAX(CASE WHEN from_base32(json_extract_scalar(key_decoded, '$.vec[1].address')) < from_base32(json_extract_scalar(key_decoded, '$.vec[2].address'))
+                THEN json_extract_scalar(key_decoded, '$.vec[2].address') ELSE json_extract_scalar(key_decoded, '$.vec[1].address') END),
+       MIN(closed_at)
+FROM stellar.contract_data
+WHERE contract_id = 'CD3KRKGDRVWPXVB3VXLUMQKMX6XZ6Q2H334IVZD4XXNAMKSRVQL5GLYF' AND closed_at_date >= DATE '2026-03-01'
+  AND contract_key_type = 'ScValTypeScvVec' AND json_extract_scalar(key_decoded, '$.vec[0].symbol') = 'GetPool'
+  AND json_extract_scalar(val_decoded, '$.address') IS NOT NULL
 GROUP BY 1, 2, 3
 
 )

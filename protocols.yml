@@ -124,3 +124,23 @@ protocols:
       trader: [trade on SDEX with the asset]
     note: >
       Mint y redeem pasan por el issuer: un payment desde GCRYUGD5... es un mint, hacia él es un redeem.
+
+  sushiswap:
+    kind: amm_clmm                 # estilo Uniswap v3: posiciones concentradas como NFT del position manager
+    added: 2026-09-22              # agregado después de la submission SCF #35
+    docs: https://github.com/soroswap/grapho/blob/main/src/chain/venues/sushi.ts (privado; interfaz verificada con stellar contract info)
+    user_source: events            # eventos de los pools; el router y el position manager no se leen
+    contracts:
+      factory: CD3KRKGDRVWPXVB3VXLUMQKMX6XZ6Q2H334IVZD4XXNAMKSRVQL5GLYF      # primer registro en Dune 2026-03-02
+      default_router: CAUF4DFYSX52L2KJ4J7OFW3WDQMEUDVXNB7PG5VIC4VVOA3BCLWXDO2E  # del storage del factory (DefaultRouter)
+      position_manager: CARTUL5AWDZYBSN7HUUJZSKCAKCIAKM7M54Z76G6KRYCK4XPR3OHUQZ4 # owner de los mint/burn/collect de los pools
+      flash_executor: CDKKPFBNNQETVN4Y2CIU6CQMWCPIZDXDZE76IDSTF7HLQT6Q573PCDTH   # del storage del factory; sin eventos en 7 días
+    fee_tiers: {500: 10, 3000: 60, 10000: 200}   # fee (centésimas de bip) → tick_spacing, del storage del factory
+    pools: >
+      Desde el storage del factory, dos entradas GetPool por pool (una por orden de tokens). 58 pools
+      al 2026-09-22, los mismos 58 que da stellar.expert (misma fuente que scripts/backfill-sushi-pools.ts
+      de grapho). token0 = el token con bytes de dirección menores (58 de 58 contra params.token0 del
+      pool). Registro en data/contracts.csv.
+    roles:
+      swapper: [swap]              # user = sender del evento del pool, también cuando rutea el router
+      lp: [mint, collect]          # mint: sender · collect: recipient. burn no se lee (sin usuario, no mueve tokens)

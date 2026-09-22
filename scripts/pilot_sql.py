@@ -311,7 +311,7 @@ SELECT 'invalid_role_or_date', COUNT(*) FROM users WHERE role IS NULL OR activit
 UNION ALL
 SELECT 'out_of_coverage', COUNT(*) FROM users WHERE activity_date < covered_from OR activity_date >= covered_until
 UNION ALL
-SELECT 'missing_protocol_metadata', 6 - COUNT(DISTINCT protocol)
+SELECT 'missing_protocol_metadata', {len(activity_sql.PROTOCOLS)} - COUNT(DISTINCT protocol)
 FROM dune.paltalabs.result_scf_users WHERE row_kind = 'metadata'
 UNION ALL
 SELECT 'archive_live_gap', COUNT(*) FROM (
@@ -367,7 +367,7 @@ ORDER BY h.protocol
 
 
 def chart_ecosystem(grain):
-    return f"""-- Chart source: unique addresses across all six protocols, complete calendar {grain}s.
+    return f"""-- Chart source: unique addresses across all protocols, complete calendar {grain}s.
 SELECT CAST(date_trunc('{grain}', activity_date) AS DATE) AS period_start,
        COUNT(DISTINCT user_address) AS active_addresses,
        COUNT(DISTINCT CASE WHEN user_address LIKE 'G%' THEN user_address END) AS g_addresses,

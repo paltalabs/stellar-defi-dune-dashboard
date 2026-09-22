@@ -8,7 +8,7 @@ por período y no una vez por gráfico.
 
 | Columna | Tipo | Qué es |
 |---|---|---|
-| `protocol` | varchar | `blend`, `fxdao`, `soroswap`, `aquarius`, `phoenix`, `etherfuse` |
+| `protocol` | varchar | `blend`, `fxdao`, `soroswap`, `aquarius`, `phoenix`, `etherfuse`, `sushiswap` |
 | `contract_id` | varchar | contrato que emitió el evento o recibió la invocación |
 | `closed_at` | timestamp | cierre del ledger |
 | `tx_hash` | varchar | hash hex en minúsculas, `lower(to_hex(transaction_hash))` |
@@ -26,7 +26,7 @@ por período y no una vez por gráfico.
 | `source_layer` | varchar | `archive` o `live` |
 
 Generado por `scripts/activity_sql.py` (Fase 1, 2026-09-22). El archive cubre desde
-2024-02-01 hasta el primer día del mes en curso; la viva, desde el `covered_until` del archive
+2024-02-01 (SushiSwap desde 2026-03-01, el mes de su factory) hasta el primer día del mes en curso; la viva, desde el `covered_until` del archive
 (con poda literal de 75 días) hasta ayer. Las dos capas no se solapan, así que la unión no
 deduplica.
 
@@ -53,6 +53,7 @@ Verificado con sondeos de 7 y 30 días el 2026-09-10 (queries 8666280, 8666378, 
 | Soroswap | eventos del router, los pares y las 10 versiones del aggregator | `data.map.to`, **un registro por evento** (antes se pivoteaba por transacción y varias swaps de una tx quedaban en una con un solo destinatario) | `SoroswapRouter swap` y `SoroswapPair swap` → swapper · `deposit`, `withdraw` de pares → lp · `SoroswapAggregator swap` → aggregator_user |
 | Phoenix | eventos de los pools (registro desde el storage de la factory) | Formato nuevo: un evento por acción con `data.map`, pivoteado por evento. Formato viejo: N eventos por acción con topics `["swap","sender"]`...; se agrupa por `(pool, tx_hash, action)` y, si en ese grupo hay más de un `sender`, cada uno queda como fila sin montos en vez de fundirlos | `swap` → swapper · `provide_liquidity`, `withdraw_liquidity` → lp |
 | FxDAO | `stellar.history_operations` (los contratos no emiten eventos útiles) | `source_account`; la función en `parameters_json_decoded[1].symbol` | vaults: `new_vault`, `increase_collateral`, `increase_debt`, `pay_debt`, `redeem`, `liquidate` → vault_owner / redeemer / liquidator · locking pool: `deposit`, `withdraw` → lp |
+| SushiSwap | eventos de los 58 pools (CLMM estilo Uniswap v3; verificado el 2026-09-22 con 30 días) | `swap`: `data.map.sender`, también cuando rutea el router (el router pasa la wallet como `sender`; su propio evento no se lee). Montos con signo: positivo entra al pool (304 de 304 swaps de un salto coinciden con el `amount_in` del router). `mint`: `sender` (51 de 51 igual al firmante cuando se invoca directo el position manager). `collect`: `recipient`. `burn` no se lee: no trae usuario, va en otra transacción que su `collect` y no mueve tokens; los tokens salen del pool en el `collect` | `swap` → swapper · `add_liquidity` (mint), `collect` → lp |
 | Etherfuse | `stellar.history_operations` y `stellar.history_trades` filtradas por el issuer | `source_account`, `from`, `to`, cuentas de cada trade | payment desde el issuer → minter (el receptor) · payment hacia el issuer → redeemer · otros payments → holder · trades → trader |
 
 ## Descubrimiento de pools
@@ -61,7 +62,7 @@ Verificado con sondeos de 7 y 30 días el 2026-09-10 (queries 8666280, 8666378, 
 pools desde el storage de las factories y desde los eventos `add_pool` de los routers de
 Aquarius. El primer escaneo desde 2024 costó 78,9 cr; desde entonces se lee a sí mismo y solo
 mira los últimos 14 días (3,9 cr). Al 2026-09-22: 27 pools de Blend, 214 pares de Soroswap,
-14 pools de Phoenix y 431 de Aquarius (31 más que la lista de septiembre).
+14 pools de Phoenix, 431 de Aquarius (31 más que la lista de septiembre) y 58 de SushiSwap.
 
 Las queries de actividad llevan esas listas **literales**, generadas desde `data/contracts.csv`
 (`deploy_pilot.py export-registry`). Un `IN (subquery)` no poda particiones: la misma consulta
@@ -75,10 +76,13 @@ todavía no incluye; el arreglo es `export-registry` y volver a desplegar las ca
 | Phoenix | factory | key `map{token_a, token_b[, pool_type]}` → val `{"address":"<pool>"}` |
 | Aquarius | routers, eventos `add_pool` | la dirección del pool en `data`; `data/aquarius-pools.csv` es la lista vieja de septiembre |
 | Soroswap | factory | key `{"vec":[{"symbol":"PairAddressesNIndexed"},...]}` → val `{"address":"<pair>"}` |
+| SushiSwap | factory | key `{"vec":[{"symbol":"GetPool"},{"address":"<token>"},{"address":"<token>"},{"u32":<fee>}]}` → val `{"address":"<pool>"}`, dos entradas por pool (una por orden). `token_a` = token0 = el de bytes de dirección menores (`from_base32`; 58 de 58 contra el `params.token0` de cada pool, el orden de texto falla en 3). Se escanea siempre desde 2026-03-01 (0,08 cr). 58 pools al 2026-09-22, iguales a los de stellar.expert |
 
 ## Montos y precios
 
-Los montos quedan en unidades del token (7 decimales). El precio en USD se agrega en la capa de
+Los montos quedan en unidades del token (7 decimales). En SushiSwap aparecen swaps con montos
+crudos de 19 y 20 dígitos, lo que sugiere tokens con más de 7 decimales (no verificado). La capa de
+precios del Entregable 3 tiene que leer los decimales de cada token antes de valorizar. El precio en USD se agrega en la capa de
 análisis, para el entregable 3, con una tabla de precios diaria propia y acotada a los tokens
 que efectivamente aparecen (patrón del repo dune-dashboards: 8 assets cuestan 1,35 cr/día; 70
 tokens costaban 825).

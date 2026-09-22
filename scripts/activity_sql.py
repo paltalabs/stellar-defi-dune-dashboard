@@ -11,8 +11,11 @@ import csv
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PROTOCOLS = ('blend', 'aquarius', 'soroswap', 'phoenix', 'fxdao', 'etherfuse')
+PROTOCOLS = ('blend', 'aquarius', 'soroswap', 'phoenix', 'fxdao', 'etherfuse', 'sushiswap')
 HISTORY_START = '2024-02-01'
+# SushiSwap's factory first appears on 2026-03-02: its archive starts there instead of scanning 2024.
+SUSHI_START = '2026-03-01'
+HISTORY_STARTS = {'sushiswap': SUSHI_START}
 LIVE_PRUNE_DAYS = 75
 REGISTRY_CSV = ROOT / 'data' / 'contracts.csv'
 
@@ -40,6 +43,7 @@ FXDAO_VAULTS = 'CCUN4RXU5VNDHSF4S4RKV4ZJYMX2YWKOH6L4AKEKVNVDQ7HY5QIAO4UB'
 FXDAO_LOCKING = 'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP'
 ETHERFUSE_ISSUER = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'
 COMET_BLND_USDC = 'CAS3FL6TLZKDGGSISDBWGGPXT3NRR4DYTZD7YOD3HMYO6LTJUVGRVEAM'
+SUSHI_FACTORY = 'CD3KRKGDRVWPXVB3VXLUMQKMX6XZ6Q2H334IVZD4XXNAMKSRVQL5GLYF'
 # Contracts that route trades for end users. A trade whose user is one of these is counted for
 # the contract, not for the person behind it (docs/modelo-de-datos.md, integridad).
 AGGREGATORS = SOROSWAP_AGGREGATORS + [SOROSWAP_ROUTER] + AQUARIUS_ROUTERS
@@ -103,6 +107,21 @@ WHERE he.contract_id IN ({lit(AQUARIUS_ROUTERS)}) AND he.closed_at_date >= {sinc
   {EVENT_FILTERS}
   AND he.topics_decoded LIKE '[{{"symbol":"add_pool"}}%'
   AND regexp_extract(he.data_decoded, '"address":"(C[A-Z2-7]{{55}})"', 1) IS NOT NULL
+GROUP BY 1, 2, 3
+UNION ALL
+-- SushiSwap: two GetPool entries per pool, one per token order. token_a is the pool's token0, the
+-- token with the lower address bytes (58 of 58 pools against their params.token0, 2026-09-22; string
+-- order fails on 3). Always scanned from the factory's start: 0,08 cr, so no incremental window.
+SELECT 'sushiswap', 'pool', json_extract_scalar(val_decoded, '$.address'),
+       MAX(CASE WHEN from_base32(json_extract_scalar(key_decoded, '$.vec[1].address')) < from_base32(json_extract_scalar(key_decoded, '$.vec[2].address'))
+                THEN json_extract_scalar(key_decoded, '$.vec[1].address') ELSE json_extract_scalar(key_decoded, '$.vec[2].address') END),
+       MAX(CASE WHEN from_base32(json_extract_scalar(key_decoded, '$.vec[1].address')) < from_base32(json_extract_scalar(key_decoded, '$.vec[2].address'))
+                THEN json_extract_scalar(key_decoded, '$.vec[2].address') ELSE json_extract_scalar(key_decoded, '$.vec[1].address') END),
+       MIN(closed_at)
+FROM stellar.contract_data
+WHERE contract_id = '{SUSHI_FACTORY}' AND closed_at_date >= DATE '{SUSHI_START}'
+  AND contract_key_type = 'ScValTypeScvVec' AND json_extract_scalar(key_decoded, '$.vec[0].symbol') = 'GetPool'
+  AND json_extract_scalar(val_decoded, '$.address') IS NOT NULL
 GROUP BY 1, 2, 3
 """
 
@@ -510,8 +529,68 @@ SELECT 'etherfuse', NULL, closed_at, 'op:' || CAST(history_operation_id AS VARCH
 FROM trades"""
 
 
+def sushiswap(win):
+    """Uniswap-v3-style CLMM, pool events only (checked on 2026-09-22 over 30 days). swap carries the
+    user as sender, also when the default router routes it (the router passes the wallet as sender),
+    so the router's own swap event is not read. Amounts are signed: positive went into the pool
+    (304 of 304 single-hop routed swaps matched the router's amount_in). mint carries the wallet as
+    sender (51 of 51 equal to the signer when the position manager is invoked directly; most mints
+    come through another contract with no signer to read). burn is not read: it carries no user, runs
+    in a different tx than its collect, and moves no tokens; the tokens leave the pool in collect,
+    which carries the recipient (30 days to 2026-09-22: 505 burns, 504 collects)."""
+    rows = contracts('sushiswap', 'pool')
+    pools = [r['contract_id'] for r in rows]
+    tokens = ',\n    '.join(f"('{r['contract_id']}', '{r['token_a']}', '{r['token_b']}')" for r in rows)
+    return f"""WITH pools AS (SELECT * FROM (VALUES
+    {tokens}) AS v(pool, token0, token1)),
+ev AS (
+  SELECT DISTINCT he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash,
+    json_extract_scalar(he.topics_decoded, '$[0].symbol') AS action, he.data_decoded
+  FROM stellar.history_contract_events he
+  WHERE {win('he.closed_at_date')}
+    AND he.contract_id IN ({lit(pools)})
+    {EVENT_FILTERS}
+    AND json_extract_scalar(he.topics_decoded, '$[0].symbol') IN ('swap', 'mint', 'collect')
+),
+kv AS (
+  SELECT e.contract_id, e.closed_at, e.tx_hash, e.action, xxhash64(to_utf8(e.data_decoded)) AS event_key,
+         json_extract_scalar(elem, '$.key.symbol') AS k,
+         json_extract_scalar(elem, '$.val.address') AS v_addr,
+         COALESCE(TRY(CAST(json_extract_scalar(elem, '$.val.i128') AS DECIMAL(38,0))),
+                  TRY(CAST(json_extract_scalar(elem, '$.val.u128') AS DECIMAL(38,0)))) AS v_int
+  FROM ev e
+  CROSS JOIN UNNEST(CAST(json_extract(e.data_decoded, '$.map') AS array(json))) AS t(elem)
+),
+pivoted AS (
+  SELECT contract_id, closed_at, tx_hash, action, event_key,
+    MAX(CASE WHEN k = 'sender' THEN v_addr END) AS sender,
+    MAX(CASE WHEN k = 'recipient' THEN v_addr END) AS recipient,
+    MAX(CASE WHEN k = 'amount0' THEN v_int END) AS amount0,
+    MAX(CASE WHEN k = 'amount1' THEN v_int END) AS amount1
+  FROM kv
+  GROUP BY 1, 2, 3, 4, 5
+)
+SELECT 'sushiswap' AS protocol, p.contract_id, p.closed_at, p.tx_hash,
+  CASE p.action WHEN 'collect' THEN p.recipient ELSE p.sender END AS user_address,
+  CASE p.action WHEN 'mint' THEN 'add_liquidity' ELSE p.action END AS action,
+  CASE p.action WHEN 'swap' THEN 'swapper' ELSE 'lp' END AS role,
+  p.contract_id AS pool,
+  CASE WHEN p.action <> 'swap' OR p.amount0 > 0 THEN r.token0 ELSE r.token1 END AS token_a,
+  CAST(CASE WHEN p.action <> 'swap' THEN p.amount0 WHEN p.amount0 > 0 THEN p.amount0 ELSE p.amount1 END
+       * DECIMAL '0.0000001' AS DECIMAL(38,7)) AS amount_a,
+  CASE WHEN p.action <> 'swap' OR p.amount0 > 0 THEN r.token1 ELSE r.token0 END AS token_b,
+  CAST(CASE WHEN p.action <> 'swap' THEN p.amount1 WHEN p.amount0 > 0 THEN -p.amount1 ELSE -p.amount0 END
+       * DECIMAL '0.0000001' AS DECIMAL(38,7)) AS amount_b
+FROM pivoted p
+LEFT JOIN pools r ON r.pool = p.contract_id"""
+
+
 SOURCES = {'blend': blend, 'aquarius': aquarius, 'soroswap': soroswap, 'phoenix': phoenix,
-           'fxdao': fxdao, 'etherfuse': etherfuse}
+           'fxdao': fxdao, 'etherfuse': etherfuse, 'sushiswap': sushiswap}
+
+
+def history_start(protocol):
+    return HISTORY_STARTS.get(protocol, HISTORY_START)
 
 
 def archive_table(p):
@@ -531,7 +610,7 @@ def layer(protocol, kind, window=None):
         win = lambda col: f'{col} >= {start} AND {col} < {end}'
         cov_from, cov_until = start, end
     elif kind == 'archive':
-        start, end = f"DATE '{HISTORY_START}'", "CAST(date_trunc('month', CURRENT_DATE) AS DATE)"
+        start, end = f"DATE '{history_start(protocol)}'", "CAST(date_trunc('month', CURRENT_DATE) AS DATE)"
         win = lambda col: f'{col} >= {start} AND {col} < {end}'
         cov_from, cov_until = start, end
     else:
@@ -580,12 +659,12 @@ SELECT protocol, contract_id, closed_at, tx_hash, user_address, action, role, po
 FROM prev
 UNION ALL
 SELECT protocol, contract_id, closed_at, tx_hash, user_address, action, role, pool, token_a, amount_a, token_b, amount_b,
-       'activity', DATE '{HISTORY_START}', {new_until}, CURRENT_TIMESTAMP, 'archive'
+       'activity', DATE '{history_start(protocol)}', {new_until}, CURRENT_TIMESTAMP, 'archive'
 FROM src
 WHERE regexp_like(user_address, '^[GC][A-Z2-7]{{55}}$') AND role IS NOT NULL
 UNION ALL
 SELECT '{protocol}', NULL, CAST(NULL AS TIMESTAMP WITH TIME ZONE), NULL, NULL, NULL, NULL, NULL, NULL, CAST(NULL AS DECIMAL(38,7)), NULL, CAST(NULL AS DECIMAL(38,7)),
-       'metadata', DATE '{HISTORY_START}', {new_until}, CURRENT_TIMESTAMP, 'archive'
+       'metadata', DATE '{history_start(protocol)}', {new_until}, CURRENT_TIMESTAMP, 'archive'
 """
 
 

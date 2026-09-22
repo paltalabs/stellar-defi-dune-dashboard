@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796533
 -- Matview: dune.paltalabs.result_scf_users_weekly   cron: 0 9 * * *
--- Última ejecución: 01M32WS55H6S2BDC3PY1PWSFNN
--- Costo: 1.069 cr; filas: 828; engine medium
+-- Última ejecución: 01M34WPWSKK30A35CCFTK5MPVF
+-- Costo: 1.722 cr; filas: 865; engine medium
 -- Calendar weeks in UTC. New = first observed in covered history, not account creation.
 WITH metadata AS (
   SELECT protocol, MIN(covered_from) AS history_from, MAX(covered_until) AS covered_until
