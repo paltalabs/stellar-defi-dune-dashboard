@@ -1,7 +1,7 @@
 # Modelo de datos
 
-Una sola tabla normalizada por protocolo, con el mismo esquema en todos. Los cuatro entregables
-de la SCF se calculan encima de ella, así que las tablas crudas de Stellar se escanean una vez
+Una sola tabla normalizada por protocolo, con el mismo esquema en todos. Todas las métricas
+se calculan encima de ella, así que las tablas crudas de Stellar se escanean una vez
 por período y no una vez por gráfico.
 
 ## Esquema de `result_scf_<protocolo>_activity` (y su `_archive`)
@@ -82,8 +82,8 @@ todavía no incluye; el arreglo es `export-registry` y volver a desplegar las ca
 
 Los montos quedan en unidades del token (7 decimales). En SushiSwap aparecen swaps con montos
 crudos de 19 y 20 dígitos, lo que sugiere tokens con más de 7 decimales (no verificado). La capa de
-precios del Entregable 3 tiene que leer los decimales de cada token antes de valorizar. El precio en USD se agrega en la capa de
-análisis, para el entregable 3, con una tabla de precios diaria propia y acotada a los tokens
+precios de la actividad de LPs tiene que leer los decimales de cada token antes de valorizar. El precio en USD se agrega en la capa de
+análisis, para la actividad de LPs, con una tabla de precios diaria propia y acotada a los tokens
 que efectivamente aparecen (patrón del repo dune-dashboards: 8 assets cuestan 1,35 cr/día; 70
 tokens costaban 825).
 
@@ -118,4 +118,4 @@ dashboard):
 - **Para comparar protocolos entre sí**, lo correcto es la columna de acciones y la de
   concentración, no solo WAU. Para "cuánta gente usa el ecosistema", el WAU/MAU del ecosistema
   (direcciones únicas entre protocolos) y separar G de C.
-- El volumen en USD es del Entregable 3 (necesita precios) y no está en esta tabla.
+- El volumen en USD es de la actividad de LPs (necesita precios) y no está en esta tabla.

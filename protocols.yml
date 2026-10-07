@@ -137,7 +137,7 @@ protocols:
 
   sushiswap:
     kind: amm_clmm                 # estilo Uniswap v3: posiciones concentradas como NFT del position manager
-    added: 2026-09-22              # agregado después de la submission SCF #35
+    added: 2026-09-22              # agregado después del diseño inicial
     docs: https://github.com/soroswap/grapho/blob/main/src/chain/venues/sushi.ts (privado; interfaz verificada con stellar contract info)
     user_source: events            # eventos de los pools; el router y el position manager no se leen
     contracts:
