@@ -382,6 +382,109 @@ ORDER BY 1
 """
 
 
+def chart_headline():
+    """One row for the dashboard counters: last complete week and month, all protocols."""
+    return """-- Chart source: headline counters. Unique addresses across all protocols in the last complete
+-- calendar week (Monday to Sunday, UTC) and month, with the previous period for growth.
+WITH b AS (
+  SELECT CAST(date_trunc('week', CURRENT_DATE) AS DATE) AS w, CAST(date_trunc('month', CURRENT_DATE) AS DATE) AS m
+), u AS (
+  SELECT activity_date, user_address FROM dune.paltalabs.result_scf_users
+  WHERE row_kind = 'activity' AND activity_date >= (SELECT date_add('month', -2, m) FROM b)
+), c AS (
+  SELECT
+    COUNT(DISTINCT CASE WHEN activity_date >= date_add('day', -7, w) AND activity_date < w THEN user_address END) AS wau,
+    COUNT(DISTINCT CASE WHEN activity_date >= date_add('day', -7, w) AND activity_date < w AND user_address LIKE 'G%' THEN user_address END) AS wau_g,
+    COUNT(DISTINCT CASE WHEN activity_date >= date_add('day', -14, w) AND activity_date < date_add('day', -7, w) THEN user_address END) AS wau_prev,
+    COUNT(DISTINCT CASE WHEN activity_date >= date_add('month', -1, m) AND activity_date < m THEN user_address END) AS mau,
+    COUNT(DISTINCT CASE WHEN activity_date >= date_add('month', -1, m) AND activity_date < m AND user_address LIKE 'G%' THEN user_address END) AS mau_g,
+    COUNT(DISTINCT CASE WHEN activity_date >= date_add('month', -2, m) AND activity_date < date_add('month', -1, m) THEN user_address END) AS mau_prev,
+    MIN(date_add('day', -7, w)) AS week_start, MIN(date_add('month', -1, m)) AS month_start
+  FROM u CROSS JOIN b
+)
+SELECT wau, wau_g, wau_prev, CAST(wau - wau_prev AS DOUBLE) / NULLIF(wau_prev, 0) AS wau_growth,
+       ROUND(100.0 * (wau - wau_prev) / NULLIF(wau_prev, 0), 1) AS wau_growth_pct,
+       mau, mau_g, mau_prev, CAST(mau - mau_prev AS DOUBLE) / NULLIF(mau_prev, 0) AS mau_growth,
+       ROUND(100.0 * (mau - mau_prev) / NULLIF(mau_prev, 0), 1) AS mau_growth_pct,
+       week_start, month_start
+FROM c
+"""
+
+
+def chart_protocol_latest():
+    """Active addresses per protocol in the last complete week and month, plus Soroswap total."""
+    return """-- Chart source: active addresses per protocol in the last complete calendar week and month (UTC).
+-- Soroswap appears as its two products and as a total: unique addresses across AMM and aggregator.
+WITH wp AS (SELECT MAX(period_start) AS p FROM dune.paltalabs.result_scf_users_weekly WHERE is_complete),
+mp AS (SELECT MAX(period_start) AS p FROM dune.paltalabs.result_scf_users_monthly WHERE is_complete),
+w AS (
+  SELECT protocol, active_addresses, g_addresses FROM dune.paltalabs.result_scf_users_weekly
+  WHERE is_complete AND period_start = (SELECT p FROM wp)
+), m AS (
+  SELECT protocol, active_addresses, g_addresses FROM dune.paltalabs.result_scf_users_monthly
+  WHERE is_complete AND period_start = (SELECT p FROM mp)
+), s AS (
+  SELECT 'soroswap_total' AS protocol,
+    COUNT(DISTINCT CASE WHEN activity_date >= (SELECT p FROM wp) AND activity_date < date_add('day', 7, (SELECT p FROM wp)) THEN user_address END) AS last_week_active,
+    COUNT(DISTINCT CASE WHEN activity_date >= (SELECT p FROM wp) AND activity_date < date_add('day', 7, (SELECT p FROM wp)) AND user_address LIKE 'G%' THEN user_address END) AS last_week_g,
+    COUNT(DISTINCT CASE WHEN activity_date >= (SELECT p FROM mp) AND activity_date < date_add('month', 1, (SELECT p FROM mp)) THEN user_address END) AS last_month_active,
+    COUNT(DISTINCT CASE WHEN activity_date >= (SELECT p FROM mp) AND activity_date < date_add('month', 1, (SELECT p FROM mp)) AND user_address LIKE 'G%' THEN user_address END) AS last_month_g
+  FROM dune.paltalabs.result_scf_users
+  WHERE row_kind = 'activity' AND protocol IN ('soroswap_amm', 'soroswap_aggregator')
+    AND activity_date >= LEAST((SELECT p FROM wp), (SELECT p FROM mp))
+)
+SELECT m.protocol, COALESCE(w.active_addresses, 0) AS last_week_active, COALESCE(w.g_addresses, 0) AS last_week_g,
+       m.active_addresses AS last_month_active, m.g_addresses AS last_month_g
+FROM m LEFT JOIN w ON w.protocol = m.protocol
+UNION ALL
+SELECT protocol, last_week_active, last_week_g, last_month_active, last_month_g FROM s
+ORDER BY last_month_active DESC
+"""
+
+
+TRACKED = [
+    ('blend', 'Blend', 'Lending', 'Supply, withdraw, borrow, repay, liquidations, backstop deposits and withdrawals'),
+    ('aquarius', 'Aquarius', 'AMM', 'Swaps, liquidity deposits and withdrawals, reward claims'),
+    ('soroswap_total', 'Soroswap (AMM + aggregator)', 'AMM and aggregator', 'Any of the two Soroswap products below; an address using both counts once'),
+    ('soroswap_amm', '  Soroswap AMM', 'AMM', 'Swaps and liquidity on the Soroswap router and pairs'),
+    ('soroswap_aggregator', '  Soroswap Aggregator', 'Aggregator', 'Swaps routed by the aggregator: contracts (all versions), SDEX path payments and multicall swaps built by its API'),
+    ('phoenix', 'Phoenix', 'AMM', 'Swaps, liquidity provided and withdrawn'),
+    ('sushiswap', 'SushiSwap', 'AMM (concentrated liquidity)', 'Swaps, liquidity minted and collected (since March 2026)'),
+    ('fxdao', 'FxDAO', 'CDP stablecoins', 'Vault operations, redemptions, liquidations and locking pool'),
+    ('etherfuse', 'Etherfuse', 'Tokenized bonds (classic assets)', 'Mints, redeems, payments and SDEX trades of its stablebonds'),
+]
+
+
+def chart_tracked_protocols():
+    """The protocols the dashboard tracks, what counts as activity there, and current coverage."""
+    rows = ',\n  '.join(f"('{k}', '{n}', '{c}', '{m}', {i})" for i, (k, n, c, m) in enumerate(TRACKED, 1))
+    return f"""-- Chart source: the protocols this dashboard tracks, with what is measured and current coverage.
+-- Soroswap appears as its two products and as a total (unique addresses across both).
+WITH info (protocol, name, category, measured, ord) AS (VALUES
+  {rows}
+), contracts AS (
+  SELECT protocol, COUNT(DISTINCT contract_id) AS registry_contracts FROM dune.paltalabs.result_scf_contracts GROUP BY 1
+), health AS (
+  SELECT protocol, history_from, observed_addresses, last_activity_at, pipeline_status FROM dune.paltalabs.result_scf_users_health
+  UNION ALL
+  SELECT 'soroswap_total', MIN(h.history_from),
+         (SELECT COUNT(DISTINCT user_address) FROM dune.paltalabs.result_scf_users
+          WHERE row_kind = 'activity' AND protocol IN ('soroswap_amm', 'soroswap_aggregator')),
+         MAX(h.last_activity_at), MIN(h.pipeline_status)
+  FROM dune.paltalabs.result_scf_users_health h WHERE h.protocol IN ('soroswap_amm', 'soroswap_aggregator')
+)
+SELECT i.name AS protocol, i.category, i.measured,
+       CASE WHEN i.protocol IN ('soroswap_amm', 'soroswap_total') THEN c_s.registry_contracts ELSE c.registry_contracts END AS pools_or_pairs_tracked,
+       CAST(h.history_from AS DATE) AS tracked_since, h.observed_addresses AS addresses_observed,
+       CAST(h.last_activity_at AS DATE) AS last_activity, h.pipeline_status AS status
+FROM info i
+LEFT JOIN health h ON h.protocol = i.protocol
+LEFT JOIN contracts c ON c.protocol = i.protocol
+LEFT JOIN contracts c_s ON c_s.protocol = 'soroswap'
+ORDER BY i.ord
+"""
+
+
 CHARTS = {'chart_integrity': lambda: __import__('activity_sql').chart_integrity(),
           'chart_ecosystem_weekly': lambda: chart_ecosystem('week'),
           'chart_ecosystem_monthly': lambda: chart_ecosystem('month'),
@@ -389,4 +492,7 @@ CHARTS = {'chart_integrity': lambda: __import__('activity_sql').chart_integrity(
           'chart_monthly_protocol': lambda: chart_protocol('month'),
           'chart_roles_weekly': lambda: chart_roles('week'),
           'chart_roles_monthly': lambda: chart_roles('month'),
-          'chart_health': chart_health}
+          'chart_health': chart_health,
+          'chart_headline': chart_headline,
+          'chart_protocol_latest': chart_protocol_latest,
+          'chart_tracked_protocols': chart_tracked_protocols}
