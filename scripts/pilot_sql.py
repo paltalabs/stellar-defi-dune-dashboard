@@ -297,7 +297,10 @@ FROM previous ORDER BY period_start, protocol{role_select}
 
 def validation():
     import activity_sql
-    registered = activity_sql.lit(activity_sql.registered_literals())
+    # The registry only grows (it reads its own snapshot), so the difference between its size and
+    # the contracts the SQL knows is the number of contracts the SQL still misses. A literal NOT IN
+    # list did the same job at 45 KB of SQL.
+    registered = len(set(activity_sql.registered_literals()))
     return f"""WITH users AS (SELECT * FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity'),
 duplicate_keys AS (
   SELECT protocol, activity_date, user_address, role, COUNT(*) AS n
@@ -311,7 +314,7 @@ SELECT 'invalid_role_or_date', COUNT(*) FROM users WHERE role IS NULL OR activit
 UNION ALL
 SELECT 'out_of_coverage', COUNT(*) FROM users WHERE activity_date < covered_from OR activity_date >= covered_until
 UNION ALL
-SELECT 'missing_protocol_metadata', {len(activity_sql.PROTOCOLS)} - COUNT(DISTINCT protocol)
+SELECT 'missing_protocol_metadata', {len(activity_sql.REPORTED_PROTOCOLS)} - COUNT(DISTINCT protocol)
 FROM dune.paltalabs.result_scf_users WHERE row_kind = 'metadata'
 UNION ALL
 SELECT 'archive_live_gap', COUNT(*) FROM (
@@ -321,8 +324,7 @@ SELECT 'archive_live_gap', COUNT(*) FROM (
       OR MAX(covered_until) FILTER (WHERE source_layer = 'archive') < MAX(covered_from) FILTER (WHERE source_layer = 'live')
 )
 UNION ALL
-SELECT 'unregistered_contracts', COUNT(*) FROM dune.paltalabs.result_scf_contracts
-WHERE contract_id NOT IN ({registered})
+SELECT 'unregistered_contracts', COUNT(DISTINCT contract_id) - {registered} FROM dune.paltalabs.result_scf_contracts
 UNION ALL
 SELECT 'cohort_partition_weekly', COUNT(*) FROM dune.paltalabs.result_scf_users_weekly
 WHERE new_observed + returning_observed <> active_addresses OR g_addresses + c_addresses <> active_addresses

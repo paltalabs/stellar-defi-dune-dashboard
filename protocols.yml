@@ -61,6 +61,8 @@ protocols:
     docs: https://docs.soroswap.finance
     user_source: events            # SoroswapPair swap/deposit/withdraw (to), SoroswapRouter swap, SoroswapAggregator swap
     sdex_source: memo              # aggregator via SDEX: txs with memo 'SoroswapAggregator%' + path payments; tx account and recipient (desde 2026-09-22)
+    multicall_source: fee_transfer # aggregator via multicall router: invoke_host_function a los routers con transfer al fee receiver; el que paga es el usuario (desde 2026-10-07)
+    reported_as: [soroswap_amm, soroswap_aggregator]   # se separa por rol en result_scf_users (2026-10-07)
     contracts:
       factory: CA4HEQTL2WPEUYKYKCDOHCDNIV4QHNJ7EL4J4NQ6VADP7SYHVRYZ7AW2
       router: CAG5LRYQ5JVEUI5TEID72EYOVX44TTUJT5BQR2J6J77FH65PCCFAJDDH
@@ -74,7 +76,14 @@ protocols:
       - CAWTTRKV7N4MBFSFU7BBZVMOAFEVYMZEDUS4ULBGUQH5YMFKPOFUWPF3
       - CCWLXIBMONXFCXELPFHXPT4VSXKUSSP67DXNXWQ4YIPFGNBHQWEX4W4P
       - CDEM2W2D2SC7VU3NOCIKHZWCUNCAUWI5GUGHSWBJNBENRHSVIMUT6EM2
-      - CAYP3UWLJM7ZPTUKL6R6BFGTRWLZ46LRKOXTERI2K6BIJAWGYY62TXTO   # actual (2025-06-16)
+      - CAYP3UWLJM7ZPTUKL6R6BFGTRWLZ46LRKOXTERI2K6BIJAWGYY62TXTO   # v2 (2025-06-16), sigue activo
+    aggregator_v3:                 # soroswap/aggregator-v3; evento propio: topics [swap, token_in, token_out, user]
+      - CARVQXFP4JF5ELLXUMQ6DALR346YVGBMQOHB4ENA7SSVXAYABXLBDDC4   # actual (2026-09-14)
+      - CAVNAZFNJU63OFO7XRFQF3FBEVNBQ2SQNJY2A2AJFBGCUNCQK6J5HLER   # retirado (2026-09-11, 5 swaps de prueba)
+    multicall_routers:             # la API armó swaps Soroban con la fee adentro (2025-06 a 2026-09-22)
+      - CBZV3HBP672BV7FF3ZILVT4CNPW3N5V2WTJ2LAGOAYW5R7L2D5SLUDFZ
+      - CDAW42JDSDEI2DXEPP4E7OAYNCRUA4LGCZHXCJ4BV5WVI4O4P77FO4UV
+    fee_receiver: GBWUWAQ26NG72VHQAM73A2FF7KRJ4HXUDHW556D2UEUGAVPMWDRBJINQ
     pairs: discovered from factory storage, see dune.paltalabs.result_soroswap_pools_filtered_tokens (paltalabs/dune-dashboards)
     aggregator_protocol_ids: {0: soroswap, 1: phoenix, 2: aquarius, 3: comet}
 

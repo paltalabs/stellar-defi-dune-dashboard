@@ -35,6 +35,16 @@ SOROSWAP_AGGREGATORS = ['CCHCH6XVKTMKTYCTKKTKNE2TFP5CMORNY77TA6XSRAD2XM7I2SJBUH3
                         'CCWLXIBMONXFCXELPFHXPT4VSXKUSSP67DXNXWQ4YIPFGNBHQWEX4W4P',
                         'CDEM2W2D2SC7VU3NOCIKHZWCUNCAUWI5GUGHSWBJNBENRHSVIMUT6EM2',
                         'CAYP3UWLJM7ZPTUKL6R6BFGTRWLZ46LRKOXTERI2K6BIJAWGYY62TXTO']
+# Aggregator v3 (soroswap/aggregator-v3, mainnet 2026-09-14) and the retired v3 deployment of
+# 2026-09-11 (5 test swaps). Different event: topics [swap, token_in, token_out, user].
+SOROSWAP_AGGREGATORS_V3 = ['CARVQXFP4JF5ELLXUMQ6DALR346YVGBMQOHB4ENA7SSVXAYABXLBDDC4',
+                           'CAVNAZFNJU63OFO7XRFQF3FBEVNBQ2SQNJY2A2AJFBGCUNCQK6J5HLER']
+# Stellar multicall routers the aggregator API used to bundle a Soroban swap with its fee
+# transfers (2025-06 to 2026-09-22), and the account that receives Soroswap's fee: a transfer to
+# it inside the call marks the tx as built by the API, and whoever pays it is the user.
+SOROSWAP_MULTICALL_ROUTERS = ['CBZV3HBP672BV7FF3ZILVT4CNPW3N5V2WTJ2LAGOAYW5R7L2D5SLUDFZ',
+                              'CDAW42JDSDEI2DXEPP4E7OAYNCRUA4LGCZHXCJ4BV5WVI4O4P77FO4UV']
+SOROSWAP_FEE_RECEIVER = 'GBWUWAQ26NG72VHQAM73A2FF7KRJ4HXUDHW556D2UEUGAVPMWDRBJINQ'
 PHOENIX_FACTORY = 'CB4SVAWJA6TSRNOJZ7W2AWFW46D5VR4ZMFZKDIKXEINZCZEGZCJZCKMI'
 AQUARIUS_ROUTERS = ['CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK',
                     'CA7RQDMMV6E53P5EDZA5GPWBZ33AMW2ZNO42XLI2RGRIAP4QXIARUOJQ',
@@ -46,7 +56,7 @@ COMET_BLND_USDC = 'CAS3FL6TLZKDGGSISDBWGGPXT3NRR4DYTZD7YOD3HMYO6LTJUVGRVEAM'
 SUSHI_FACTORY = 'CD3KRKGDRVWPXVB3VXLUMQKMX6XZ6Q2H334IVZD4XXNAMKSRVQL5GLYF'
 # Contracts that route trades for end users. A trade whose user is one of these is counted for
 # the contract, not for the person behind it (docs/modelo-de-datos.md, integridad).
-AGGREGATORS = SOROSWAP_AGGREGATORS + [SOROSWAP_ROUTER] + AQUARIUS_ROUTERS
+AGGREGATORS = SOROSWAP_AGGREGATORS + SOROSWAP_AGGREGATORS_V3 + [SOROSWAP_ROUTER] + AQUARIUS_ROUTERS
 
 EVENT_FILTERS = """AND he.type_string = 'ContractEventTypeContract'
     AND he.successful = TRUE AND he.in_successful_contract_call = TRUE"""
@@ -274,28 +284,42 @@ def soroswap(win):
     """One row per event (grain includes the event payload): pivoting per transaction merged
     several swaps of one tx and kept only one recipient.
 
-    The aggregator also routes through the classic SDEX, which emits no Soroban event: successful
-    txs with memo 'SoroswapAggregator-<apiUser>' and their path payments, same criterion as
-    paltalabs/dune-dashboards (queries 8395684 and 8395746). The tx account is the user; the path
-    payment recipient counts too when it differs, in a row without amounts so volume is not doubled.
-    A Soroban tx holds a single operation, so no tx is in both sources. Classic amounts are already
-    in token units; tokens are 'native' or 'CODE:ISSUER'. 30 days to 2026-09-22 (probe 8808241,
-    4,9 cr): 27.534 path payments, 226 addresses, 138 of them absent from every other layer."""
+    Soroswap is two products and every row says which one: the AMM (router, and pairs called
+    directly) and the aggregator, which reaches users through four rails, the same ones measured
+    in paltalabs/dune-dashboards (docs/soroswap/aggregator-partners.md):
+    - contract v1/v2: 'SoroswapAggregator swap' events of the ten addresses, user in 'to';
+    - contract v3 (2026-09-11 on): 'swap' events, user in topics[3];
+    - SDEX: successful txs with memo 'SoroswapAggregator-<apiUser>' and their path payments. The
+      tx account is the user; the recipient counts too when it differs, in a row without amounts
+      so volume is not doubled. Classic amounts are in token units, tokens 'native' or 'CODE:ISSUER';
+    - multicall: the API's Soroban swaps bundled through a Stellar multicall router with a fee
+      transfer to the Soroswap fee receiver; the payer of that fee is the user. A router or pair
+      event inside such a tx is the aggregator routing, so it is not counted as AMM use, and when
+      the tx also emits a v1/v2 aggregator event that event already counts the user.
+    A Soroban tx holds a single operation, so no tx is in both the SDEX and a Soroban rail."""
     pairs = [r['contract_id'] for r in contracts('soroswap', 'pair')]
     kinds = f"""CASE WHEN he.contract_id = '{SOROSWAP_ROUTER}' THEN 'router'
-         WHEN he.contract_id IN ({lit(SOROSWAP_AGGREGATORS)}) THEN 'aggregator' ELSE 'pair' END"""
+         WHEN he.contract_id IN ({lit(SOROSWAP_AGGREGATORS)}) THEN 'aggregator'
+         WHEN he.contract_id IN ({lit(SOROSWAP_AGGREGATORS_V3)}) THEN 'aggregator_v3' ELSE 'pair' END"""
     return f"""WITH ev AS (
   SELECT DISTINCT {kinds} AS kind,
     he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash,
-    json_extract_scalar(he.topics_decoded, '$[1].symbol') AS action, he.data_decoded
+    CASE WHEN he.contract_id IN ({lit(SOROSWAP_AGGREGATORS_V3)}) THEN 'swap'
+         ELSE json_extract_scalar(he.topics_decoded, '$[1].symbol') END AS action,
+    json_extract_scalar(he.topics_decoded, '$[1].address') AS topic_token_in,
+    json_extract_scalar(he.topics_decoded, '$[2].address') AS topic_token_out,
+    json_extract_scalar(he.topics_decoded, '$[3].address') AS topic_user,
+    he.data_decoded
   FROM stellar.history_contract_events he
   WHERE {win('he.closed_at_date')}
-    AND he.contract_id IN ({lit([SOROSWAP_ROUTER] + SOROSWAP_AGGREGATORS + pairs)})
+    AND he.contract_id IN ({lit([SOROSWAP_ROUTER] + SOROSWAP_AGGREGATORS + SOROSWAP_AGGREGATORS_V3 + pairs)})
     {EVENT_FILTERS}
-    AND he.topics_decoded LIKE '[{{"string":"Soroswap%'
+    AND (he.topics_decoded LIKE '[{{"string":"Soroswap%'
+         OR (he.contract_id IN ({lit(SOROSWAP_AGGREGATORS_V3)}) AND he.topics_decoded LIKE '[{{"symbol":"swap"}}%'))
 ),
 kv AS (
   SELECT e.kind, e.contract_id, e.closed_at, e.tx_hash, e.action, xxhash64(to_utf8(e.data_decoded)) AS event_key,
+         e.topic_token_in, e.topic_token_out, e.topic_user,
          json_extract_scalar(elem, '$.key.symbol') AS k,
          json_extract_scalar(elem, '$.val.address') AS v_addr,
          COALESCE(
@@ -311,7 +335,7 @@ kv AS (
   CROSS JOIN UNNEST(CAST(json_extract(e.data_decoded, '$.map') AS array(json))) AS t(elem)
 ),
 pivoted AS (
-  SELECT kind, contract_id, closed_at, tx_hash, action, event_key,
+  SELECT kind, contract_id, closed_at, tx_hash, action, event_key, topic_token_in, topic_token_out, topic_user,
     MAX(CASE WHEN k = 'to' THEN v_addr END) AS to_addr,
     MAX(CASE WHEN k = 'pair' THEN v_addr END) AS pair,
     MAX(CASE WHEN k = 'token_a' THEN v_addr END) AS token_a,
@@ -333,9 +357,28 @@ pivoted AS (
     MAX(CASE WHEN k = 'amount_0' THEN v_i128 END) AS amount_0,
     MAX(CASE WHEN k = 'amount_1' THEN v_i128 END) AS amount_1
   FROM kv
-  GROUP BY 1, 2, 3, 4, 5, 6
+  GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
 ),
-routed_txs AS (SELECT DISTINCT tx_hash FROM pivoted WHERE kind IN ('router', 'aggregator')),
+routed_txs AS (SELECT DISTINCT tx_hash FROM pivoted WHERE kind IN ('router', 'aggregator', 'aggregator_v3')),
+mc_ops AS (
+  SELECT o.transaction_id, o.closed_at, o.contract_id, MAX(c."from") AS payer
+  FROM stellar.history_operations o
+  CROSS JOIN UNNEST(o.asset_balance_changes) AS c(amount, asset_code, asset_issuer, asset_type, "from", "to", type)
+  WHERE {win('o.closed_at_date')} AND o.type_string = 'invoke_host_function'
+    AND o.contract_id IN ({lit(SOROSWAP_MULTICALL_ROUTERS)})
+    AND c.type = 'transfer' AND c."to" = '{SOROSWAP_FEE_RECEIVER}'
+  GROUP BY 1, 2, 3
+),
+agg_txs AS (
+  SELECT id AS transaction_id, lower(to_hex(transaction_hash)) AS tx_hash, account, memo
+  FROM stellar.history_transactions
+  WHERE {win('closed_at_date')} AND successful = TRUE
+    AND (memo LIKE 'SoroswapAggregator%' OR id IN (SELECT transaction_id FROM mc_ops))
+),
+multicall AS (
+  SELECT m.closed_at, t.tx_hash, m.contract_id, m.payer
+  FROM mc_ops m JOIN agg_txs t ON t.transaction_id = m.transaction_id
+),
 normalized AS (
   SELECT contract_id, closed_at, tx_hash, to_addr AS user_address,
          CASE action WHEN 'add' THEN 'add_liquidity' WHEN 'remove' THEN 'remove_liquidity' ELSE action END AS action,
@@ -346,10 +389,19 @@ normalized AS (
          CASE action WHEN 'swap' THEN path_last ELSE token_b END AS token_b,
          CASE action WHEN 'swap' THEN amounts_last ELSE amount_b END AS amount_b_raw
   FROM pivoted WHERE kind = 'router' AND action IN ('swap', 'add', 'remove')
+    AND tx_hash NOT IN (SELECT tx_hash FROM multicall)
   UNION ALL
   SELECT contract_id, closed_at, tx_hash, to_addr, 'aggregator_swap', 'aggregator_user', NULL,
          token_in, amount_in, token_out, amount_out
   FROM pivoted WHERE kind = 'aggregator' AND action = 'swap'
+  UNION ALL
+  SELECT contract_id, closed_at, tx_hash, topic_user, 'aggregator_v3_swap', 'aggregator_user', NULL,
+         topic_token_in, amount_in, topic_token_out, amount_out
+  FROM pivoted WHERE kind = 'aggregator_v3'
+  UNION ALL
+  SELECT contract_id, closed_at, tx_hash, payer, 'aggregator_multicall_swap', 'aggregator_user', NULL,
+         NULL, NULL, NULL, NULL
+  FROM multicall WHERE tx_hash NOT IN (SELECT tx_hash FROM pivoted WHERE kind = 'aggregator')
   UNION ALL
   SELECT p.contract_id, p.closed_at, p.tx_hash, p.to_addr,
          CASE p.action WHEN 'swap' THEN 'pair_swap' WHEN 'deposit' THEN 'add_liquidity' WHEN 'withdraw' THEN 'remove_liquidity' END,
@@ -360,12 +412,9 @@ normalized AS (
   FROM pivoted p
   WHERE p.kind = 'pair' AND p.action IN ('swap', 'deposit', 'withdraw')
     AND p.tx_hash NOT IN (SELECT tx_hash FROM routed_txs)
+    AND p.tx_hash NOT IN (SELECT tx_hash FROM multicall)
 ),
-sdex_txs AS (
-  SELECT id AS transaction_id, lower(to_hex(transaction_hash)) AS tx_hash, account
-  FROM stellar.history_transactions
-  WHERE {win('closed_at_date')} AND successful = TRUE AND memo LIKE 'SoroswapAggregator%'
-),
+sdex_txs AS (SELECT transaction_id, tx_hash, account FROM agg_txs WHERE memo LIKE 'SoroswapAggregator%'),
 sdex AS (
   SELECT o.closed_at, t.tx_hash, t.account, o."to" AS recipient,
     CASE WHEN o.source_asset_type = 'native' THEN 'native' ELSE o.source_asset_code || ':' || o.source_asset_issuer END AS token_a,
@@ -699,6 +748,78 @@ SELECT '{protocol}', NULL, CAST(NULL AS TIMESTAMP WITH TIME ZONE), NULL, NULL, N
 """
 
 
+def soroswap_backfill(until='2026-10-01'):
+    """One-off, 2026-10-07: adds to the Soroswap archive the two aggregator rails it did not read
+    (v3 since 2026-09-11, multicall since 2025-06) without rescanning the whole history (a full
+    rebuild measured 150 cr on 2026-09-22). Reads the archive itself, drops the AMM rows of the
+    multicall txs (they are the aggregator routing), and appends the new rows. Run once as the
+    archive SQL, then set archive_incremental('soroswap') back."""
+    own = archive_table('soroswap')
+    v3 = lit(SOROSWAP_AGGREGATORS_V3)
+    w = lambda col, start: f"{col} >= DATE '{start}' AND {col} < DATE '{until}'"
+    return f"""-- Generated by scripts/activity_sql.py (soroswap_backfill). One-off: archive + aggregator v3 and multicall rails.
+WITH prev AS (SELECT * FROM {own} WHERE row_kind = 'activity'),
+meta AS (SELECT * FROM {own} WHERE row_kind = 'metadata'),
+v3_ev AS (
+  SELECT DISTINCT he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash,
+    json_extract_scalar(he.topics_decoded, '$[1].address') AS token_in,
+    json_extract_scalar(he.topics_decoded, '$[2].address') AS token_out,
+    json_extract_scalar(he.topics_decoded, '$[3].address') AS user_address,
+    he.data_decoded
+  FROM stellar.history_contract_events he
+  WHERE {w('he.closed_at_date', '2026-09-11')} AND he.contract_id IN ({v3})
+    {EVENT_FILTERS}
+    AND he.topics_decoded LIKE '[{{"symbol":"swap"}}%'
+),
+v3 AS (
+  SELECT e.contract_id, e.closed_at, e.tx_hash, e.user_address, e.token_in, e.token_out,
+    MAX(CASE WHEN json_extract_scalar(elem, '$.key.symbol') = 'amount_in' THEN TRY(CAST(json_extract_scalar(elem, '$.val.i128') AS DECIMAL(38,0))) END) AS amount_in,
+    MAX(CASE WHEN json_extract_scalar(elem, '$.key.symbol') = 'amount_out' THEN TRY(CAST(json_extract_scalar(elem, '$.val.i128') AS DECIMAL(38,0))) END) AS amount_out
+  FROM v3_ev e CROSS JOIN UNNEST(CAST(json_extract(e.data_decoded, '$.map') AS array(json))) AS t(elem)
+  GROUP BY 1, 2, 3, 4, 5, 6, xxhash64(to_utf8(e.data_decoded))
+),
+mc_ops AS (
+  SELECT o.transaction_id, o.closed_at, o.contract_id, MAX(c."from") AS payer
+  FROM stellar.history_operations o
+  CROSS JOIN UNNEST(o.asset_balance_changes) AS c(amount, asset_code, asset_issuer, asset_type, "from", "to", type)
+  WHERE {w('o.closed_at_date', '2025-06-01')} AND o.type_string = 'invoke_host_function'
+    AND o.contract_id IN ({lit(SOROSWAP_MULTICALL_ROUTERS)})
+    AND c.type = 'transfer' AND c."to" = '{SOROSWAP_FEE_RECEIVER}'
+  GROUP BY 1, 2, 3
+),
+multicall AS (
+  SELECT m.closed_at, lower(to_hex(t.transaction_hash)) AS tx_hash, m.contract_id, m.payer
+  FROM mc_ops m JOIN stellar.history_transactions t ON t.id = m.transaction_id
+  WHERE {w('t.closed_at_date', '2025-06-01')} AND t.successful = TRUE
+),
+new_rows AS (
+  SELECT 'soroswap' AS protocol, contract_id, closed_at, tx_hash, user_address, 'aggregator_v3_swap' AS action,
+         'aggregator_user' AS role, CAST(NULL AS VARCHAR) AS pool,
+         token_in AS token_a, CAST(amount_in * DECIMAL '0.0000001' AS DECIMAL(38,7)) AS amount_a,
+         token_out AS token_b, CAST(amount_out * DECIMAL '0.0000001' AS DECIMAL(38,7)) AS amount_b
+  FROM v3
+  UNION ALL
+  SELECT 'soroswap', contract_id, closed_at, tx_hash, payer, 'aggregator_multicall_swap', 'aggregator_user', NULL,
+         NULL, CAST(NULL AS DECIMAL(38,7)), NULL, CAST(NULL AS DECIMAL(38,7))
+  FROM multicall
+  WHERE tx_hash NOT IN (SELECT tx_hash FROM prev WHERE action = 'aggregator_swap')
+)
+SELECT protocol, contract_id, closed_at, tx_hash, user_address, action, role, pool, token_a, amount_a, token_b, amount_b,
+       row_kind, covered_from, covered_until, refreshed_at, source_layer
+FROM prev
+WHERE NOT (role IN ('swapper', 'lp') AND tx_hash IN (SELECT tx_hash FROM multicall))
+UNION ALL
+SELECT n.protocol, n.contract_id, n.closed_at, n.tx_hash, n.user_address, n.action, n.role, n.pool, n.token_a, n.amount_a, n.token_b, n.amount_b,
+       'activity', m.covered_from, m.covered_until, CURRENT_TIMESTAMP, 'archive'
+FROM new_rows n CROSS JOIN meta m
+WHERE regexp_like(n.user_address, '^[GC][A-Z2-7]{{55}}$')
+UNION ALL
+SELECT protocol, contract_id, closed_at, tx_hash, user_address, action, role, pool, token_a, amount_a, token_b, amount_b,
+       row_kind, covered_from, covered_until, CURRENT_TIMESTAMP, source_layer
+FROM meta
+"""
+
+
 def all_activity(columns='*', where="row_kind = 'activity'"):
     """Union of the twelve layers. Archive and live are disjoint by construction (live starts at
     the archive's covered_until), so nothing is deduplicated here."""
@@ -706,23 +827,37 @@ def all_activity(columns='*', where="row_kind = 'activity'"):
                                 for p in PROTOCOLS for t in (archive_table, live_table))
 
 
+# Soroswap is reported as two products: the AMM and the aggregator. The activity layers keep
+# protocol = 'soroswap'; the split happens where the user grain is built, by role.
+SPLIT_PROTOCOLS = {'soroswap': ('soroswap_amm', 'soroswap_aggregator')}
+REPORTED_PROTOCOLS = tuple(x for p in PROTOCOLS for x in SPLIT_PROTOCOLS.get(p, (p,)))
+
+
+def reported_protocol(protocol='protocol', role='role'):
+    return (f"CASE WHEN {protocol} = 'soroswap' THEN CASE WHEN {role} = 'aggregator_user' "
+            f"THEN 'soroswap_aggregator' ELSE 'soroswap_amm' END ELSE {protocol} END")
+
+
 def users():
-    """result_scf_users keeps its schema (daily user grain) so every metric on top is unchanged."""
-    return f"""-- Daily user grain derived from the twelve normalized activity layers.
+    """result_scf_users keeps its schema (daily user grain) so every metric on top is unchanged.
+    Soroswap metadata is repeated for its two reported products."""
+    return f"""-- Daily user grain derived from the normalized activity layers. Soroswap is split into
+-- soroswap_amm and soroswap_aggregator by role.
 WITH act AS (
 {all_activity('protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer')}
 ), meta AS (
 {all_activity('protocol, covered_from, covered_until, refreshed_at, source_layer', "row_kind = 'metadata'")}
 )
-SELECT protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date, user_address, role,
+SELECT {reported_protocol()} AS protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date, user_address, role,
        MAX(closed_at) AS last_activity_at, 'activity' AS row_kind,
        covered_from, covered_until, MAX(refreshed_at) AS refreshed_at, source_layer
 FROM act
 GROUP BY 1, 2, 3, 4, 7, 8, 10
 UNION ALL
-SELECT protocol, CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),
+SELECT p, CAST(NULL AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),
        CAST(NULL AS TIMESTAMP WITH TIME ZONE), 'metadata', covered_from, covered_until, refreshed_at, source_layer
 FROM meta
+CROSS JOIN UNNEST(CASE WHEN protocol = 'soroswap' THEN ARRAY['soroswap_amm', 'soroswap_aggregator'] ELSE ARRAY[protocol] END) AS t(p)
 """
 
 
@@ -731,7 +866,7 @@ def integrity():
     compares with the total. Explains why a protocol with more volume can show fewer addresses."""
     return f"""-- Activity concentration per protocol vs all protocols, last 28 complete days (UTC).
 WITH act AS (
-{all_activity('protocol, user_address, closed_at', "row_kind = 'activity' AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) >= CURRENT_DATE - INTERVAL '28' DAY AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) < CURRENT_DATE")}
+{all_activity(reported_protocol() + ' AS protocol, user_address, closed_at', "row_kind = 'activity' AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) >= CURRENT_DATE - INTERVAL '28' DAY AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) < CURRENT_DATE")}
 ), per_addr AS (
   SELECT protocol, user_address, COUNT(*) AS actions FROM act GROUP BY 1, 2
   UNION ALL
