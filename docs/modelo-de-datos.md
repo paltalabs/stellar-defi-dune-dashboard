@@ -65,7 +65,7 @@ mira los últimos 14 días (3,9 cr). Al 2026-09-22: 27 pools de Blend, 214 pares
 14 pools de Phoenix, 431 de Aquarius (31 más que la lista de septiembre) y 58 de SushiSwap.
 
 Las queries de actividad llevan esas listas **literales**, generadas desde `data/contracts.csv`
-(`deploy_pilot.py export-registry`). Un `IN (subquery)` no poda particiones: la misma consulta
+(se exporta desde `result_scf_contracts`). Un `IN (subquery)` no poda particiones: la misma consulta
 costó 0,198 cr con subquery y 0,057 con lista literal. El check `unregistered_contracts` de
 `result_scf_users_validation` da mayor que 0 cuando el registro encuentra un contrato que el SQL
 todavía no incluye; el arreglo es `export-registry` y volver a desplegar las capas.

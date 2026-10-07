@@ -2,7 +2,7 @@
 
 Texto de la submission tal como quedó aprobada. Copiado el 2026-09-10 desde
 https://communityfund.stellar.org/project/stellar-defi-dune-dashboards-xn9. Es la referencia
-contra la que se mide cada entregable; no se edita, se comenta en `plan.md`.
+contra la que se mide cada entregable; no se edita.
 
 - Ronda: SCF #35, categoría Build, estado Awarded.
 - Presupuesto: USD 25.000 en tres tranches de USD 8.333.

@@ -1,4 +1,4 @@
-"""SQL de la Fase 1: capas de actividad normalizadas según CLAUDE.md y docs/modelo-de-datos.md.
+"""SQL de la Fase 1: capas de actividad normalizadas según docs/modelo-de-datos.md.
 
 Por protocolo: result_scf_<p>_activity_archive (historia completa, cron mensual) y
 result_scf_<p>_activity (lo posterior al archive, cron diario). Las listas de contratos van
@@ -671,7 +671,7 @@ def archive_incremental(protocol):
     (weekly at most), so the matview runs every Monday: on the first Monday of the month it appends
     the month that just closed from the raw tables; on the other Mondays the date gate is false,
     Dune skips the scan (measured 0,01 cr against 0,66 open) and the table is copied as it was.
-    A full rescan of the history is the first build (runbook) and can be repeated by hand."""
+    A full rescan of the history is the first build and can be repeated by hand."""
     own = archive_table(protocol)
     month_start = "CAST(date_trunc('month', CURRENT_DATE) AS DATE)"
     gate = 'day_of_month(CURRENT_DATE) <= 7'
@@ -708,7 +708,7 @@ def all_activity(columns='*', where="row_kind = 'activity'"):
 
 def users():
     """result_scf_users keeps its schema (daily user grain) so every metric on top is unchanged."""
-    return f"""-- Daily user grain derived from the twelve normalized activity layers (CLAUDE.md rules 2 and 3).
+    return f"""-- Daily user grain derived from the twelve normalized activity layers.
 WITH act AS (
 {all_activity('protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer')}
 ), meta AS (

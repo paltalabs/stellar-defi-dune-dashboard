@@ -129,7 +129,7 @@ def daily_users(protocol, layer):
         # One-time raw build of the history layer (Aquarius, after the pool-event rewrite).
         start, end = f"DATE '{PILOT_START}'", f"DATE '{HISTORY_BOOTSTRAP_UNTIL}'"
     else:
-        # Fase 0 bridge until the CLAUDE.md activity layers exist: grows one day per day, never gaps.
+        # Fase 0 bridge until the activity layers exist: grows one day per day, never gaps.
         start, end = f"DATE '{BRIDGE_LIVE_FROM}'", 'CURRENT_DATE'
     source = users_source(protocol, start, end)
     return f"""-- Generated from scripts/pilot_sql.py; T1 address activity only.
