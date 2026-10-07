@@ -1,6 +1,6 @@
 # Stellar DeFi Dune Dashboards
 
-Verifiable on-chain metrics for the DeFi protocols on Stellar: Blend, FxDAO, Soroswap, Aquarius,
+Verifiable on-chain metrics for the DeFi protocols on Stellar: Blend, FxDAO, Soroswap (AMM and aggregator), Aquarius,
 Phoenix, Etherfuse and SushiSwap. Funded by SCF #35
 ([submission](scf/submission-scf35.md), [project page](https://communityfund.stellar.org/project/stellar-defi-dune-dashboards-xn9)).
 Built by [PaltaLabs](https://github.com/paltalabs).
@@ -10,7 +10,7 @@ Built by [PaltaLabs](https://github.com/paltalabs).
 ## Tranche 1: Weekly and Monthly Active Users
 
 - Ecosystem WAU and MAU (unique addresses across all protocols)
-- WAU and MAU per protocol
+- WAU and MAU per protocol, with Soroswap reported as two products: the AMM and the aggregator
 - WAU and MAU by role (swappers, LPs, aggregator users, lenders, borrowers, liquidators and more)
 - New vs returning addresses, weekly and monthly
 - Week-over-week and month-over-month growth
