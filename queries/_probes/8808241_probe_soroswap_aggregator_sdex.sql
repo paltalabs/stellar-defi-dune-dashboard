@@ -2,7 +2,7 @@
 -- Costo: 4.901 cr; filas: 1; engine medium. 2026-09-22.
 -- Resultado: 27.534 path payments, 226 direcciones (224 firmantes, 226 receptores), 3 swaps con receptor distinto,
 -- 6 ops con source distinta de la cuenta de la tx, 0 inválidas, 138 direcciones ausentes de result_scf_users en 30 días.
--- [SCF35 probe] Soroswap aggregator via SDEX (memo 'SoroswapAggregator%'), last 30 complete days.
+-- [probe] Soroswap aggregator via SDEX (memo 'SoroswapAggregator%'), last 30 complete days.
 WITH agg_txs AS (
   SELECT id AS transaction_id, account, memo
   FROM stellar.history_transactions
