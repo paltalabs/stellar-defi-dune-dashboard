@@ -452,6 +452,7 @@ TRACKED = [
     ('sushiswap', 'SushiSwap', 'AMM (concentrated liquidity)', 'Swaps, liquidity minted and collected (since March 2026)'),
     ('fxdao', 'FxDAO', 'CDP stablecoins', 'Vault operations, redemptions, liquidations and locking pool'),
     ('etherfuse', 'Etherfuse', 'Tokenized bonds (classic assets)', 'Mints, redeems, payments and SDEX trades of its stablebonds'),
+    ('defindex', 'DeFindex', 'Yield vaults', 'Deposits and withdrawals in DeFindex vaults (since May 2025)'),
 ]
 
 
@@ -464,6 +465,8 @@ WITH info (protocol, name, category, measured, ord) AS (VALUES
   {rows}
 ), contracts AS (
   SELECT protocol, COUNT(DISTINCT contract_id) AS registry_contracts FROM dune.paltalabs.result_scf_contracts GROUP BY 1
+  UNION ALL
+  SELECT 'defindex', COUNT(DISTINCT contract_id) FROM dune.paltalabs.result_scf_defindex_activity_archive WHERE row_kind = 'activity'
 ), health AS (
   SELECT protocol, history_from, observed_addresses, last_activity_at, pipeline_status FROM dune.paltalabs.result_scf_users_health
   UNION ALL

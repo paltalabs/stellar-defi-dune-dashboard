@@ -11,11 +11,16 @@ import csv
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PROTOCOLS = ('blend', 'aquarius', 'soroswap', 'phoenix', 'fxdao', 'etherfuse', 'sushiswap')
+PROTOCOLS = ('blend', 'aquarius', 'soroswap', 'phoenix', 'fxdao', 'etherfuse', 'sushiswap', 'defindex')
 HISTORY_START = '2024-02-01'
 # SushiSwap's factory first appears on 2026-03-02: its archive starts there instead of scanning 2024.
 SUSHI_START = '2026-03-01'
-HISTORY_STARTS = {'sushiswap': SUSHI_START}
+# DeFindex vaults went live in May 2025.
+DEFINDEX_START = '2025-05-01'
+HISTORY_STARTS = {'sushiswap': SUSHI_START, 'defindex': DEFINDEX_START}
+# Deposits and withdrawals of every DeFindex vault, already decoded and kept up to date by the
+# DeFindex dashboard pipeline (query 5900680, public). Reading it costs a fraction of a credit.
+DEFINDEX_EVENTS = 'dune.paltalabs.result_de_findex_vaults_events'
 LIVE_PRUNE_DAYS = 75
 REGISTRY_CSV = ROOT / 'data' / 'contracts.csv'
 
@@ -665,8 +670,20 @@ FROM pivoted p
 LEFT JOIN pools r ON r.pool = p.contract_id"""
 
 
+def defindex(win):
+    """DeFindex vaults: one row per deposit or withdraw; the user is the 'to' of the event (the
+    depositor, or who receives the withdrawal). Share transfers between addresses are not a
+    protocol action and are left out. Read from the decoded vault events table, not from raw
+    events. Amounts are in units of the vault asset."""
+    return f"""SELECT 'defindex' AS protocol, e.vault AS contract_id, e.closed_at, lower(to_hex(e.tx_hash)) AS tx_hash,
+  e."to" AS user_address, 'vault_' || e.event AS action, 'vault_depositor' AS role, e.vault AS pool,
+  e.asset AS token_a, CAST(e.amount AS DECIMAL(38,7)) AS amount_a,
+  CAST(NULL AS VARCHAR) AS token_b, CAST(NULL AS DECIMAL(38,7)) AS amount_b
+FROM {DEFINDEX_EVENTS} e
+WHERE {win('CAST(e.closed_at AT TIME ZONE \'UTC\' AS DATE)')} AND e.event IN ('deposit', 'withdraw')"""
+
 SOURCES = {'blend': blend, 'aquarius': aquarius, 'soroswap': soroswap, 'phoenix': phoenix,
-           'fxdao': fxdao, 'etherfuse': etherfuse, 'sushiswap': sushiswap}
+           'fxdao': fxdao, 'etherfuse': etherfuse, 'sushiswap': sushiswap, 'defindex': defindex}
 
 
 def history_start(protocol):

@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8913380
--- Matview: ninguna (gráfico, schedule de Dune)
--- Última ejecución: 01M4C26XNYRMT19DC74KFN8W1R
--- Costo: 0.227 cr; filas: 9; engine medium
+-- Matview: ninguna (gráfico)
+-- Última ejecución: 01M4DZ3VM2NZ3QR8WNBM50KWMB
+-- Costo: 0.282 cr; filas: 10; engine medium
 -- Chart source: the protocols this dashboard tracks, with what is measured and current coverage.
 -- Soroswap appears as its two products and as a total (unique addresses across both).
 WITH info (protocol, name, category, measured, ord) AS (VALUES
@@ -13,9 +13,12 @@ WITH info (protocol, name, category, measured, ord) AS (VALUES
   ('phoenix', 'Phoenix', 'AMM', 'Swaps, liquidity provided and withdrawn', 6),
   ('sushiswap', 'SushiSwap', 'AMM (concentrated liquidity)', 'Swaps, liquidity minted and collected (since March 2026)', 7),
   ('fxdao', 'FxDAO', 'CDP stablecoins', 'Vault operations, redemptions, liquidations and locking pool', 8),
-  ('etherfuse', 'Etherfuse', 'Tokenized bonds (classic assets)', 'Mints, redeems, payments and SDEX trades of its stablebonds', 9)
+  ('etherfuse', 'Etherfuse', 'Tokenized bonds (classic assets)', 'Mints, redeems, payments and SDEX trades of its stablebonds', 9),
+  ('defindex', 'DeFindex', 'Yield vaults', 'Deposits and withdrawals in DeFindex vaults (since May 2025)', 10)
 ), contracts AS (
   SELECT protocol, COUNT(DISTINCT contract_id) AS registry_contracts FROM dune.paltalabs.result_scf_contracts GROUP BY 1
+  UNION ALL
+  SELECT 'defindex', COUNT(DISTINCT contract_id) FROM dune.paltalabs.result_scf_defindex_activity_archive WHERE row_kind = 'activity'
 ), health AS (
   SELECT protocol, history_from, observed_addresses, last_activity_at, pipeline_status FROM dune.paltalabs.result_scf_users_health
   UNION ALL

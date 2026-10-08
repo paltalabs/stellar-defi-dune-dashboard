@@ -154,3 +154,13 @@ protocols:
     roles:
       swapper: [swap]              # user = sender del evento del pool, también cuando rutea el router
       lp: [mint, collect]          # mint: sender · collect: recipient. burn no se lee (sin usuario, no mueve tokens)
+
+  defindex:
+    kind: yield_vaults
+    docs: https://docs.defindex.io
+    added: 2026-10-08
+    user_source: decoded_vault_events   # dune.paltalabs.result_de_findex_vaults_events (query 5900680), deposit and withdraw; user = "to"
+    history_from: 2025-05-01            # first vault deposit 2025-05-13
+    vaults: discovered by the vault events table (96 with deposits or withdrawals at 2026-10-08)
+    not_counted: share transfers between addresses (not a protocol action)
+

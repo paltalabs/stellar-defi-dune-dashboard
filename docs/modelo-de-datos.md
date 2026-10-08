@@ -8,13 +8,13 @@ por período y no una vez por gráfico.
 
 | Columna | Tipo | Qué es |
 |---|---|---|
-| `protocol` | varchar | `blend`, `fxdao`, `soroswap`, `aquarius`, `phoenix`, `etherfuse`, `sushiswap`. En `result_scf_users` y lo que sale de ahí, `soroswap` se reporta como `soroswap_amm` y `soroswap_aggregator` (ver abajo) |
+| `protocol` | varchar | `blend`, `fxdao`, `soroswap`, `aquarius`, `phoenix`, `etherfuse`, `sushiswap`, `defindex`. En `result_scf_users` y lo que sale de ahí, `soroswap` se reporta como `soroswap_amm` y `soroswap_aggregator` (ver abajo) |
 | `contract_id` | varchar | contrato que emitió el evento o recibió la invocación |
 | `closed_at` | timestamp | cierre del ledger |
 | `tx_hash` | varchar | hash hex en minúsculas, `lower(to_hex(transaction_hash))` |
 | `user_address` | varchar | la cuenta o contrato que actuó. G = wallet, C = contrato |
 | `action` | varchar | verbo del protocolo tal cual (`swap`, `supply`, `borrow`, `backstop_deposit`...) |
-| `role` | varchar | segmento: `swapper`, `lp`, `lender`, `borrower`, `liquidator`, `backstop_provider`, `aggregator_user`, `claimer`, `holder`, `trader`, `minter`, `redeemer`, `vault_owner` |
+| `role` | varchar | segmento: `swapper`, `lp`, `lender`, `borrower`, `liquidator`, `backstop_provider`, `aggregator_user`, `claimer`, `holder`, `trader`, `minter`, `redeemer`, `vault_owner`, `vault_depositor` |
 | `pool` | varchar | pool, vault o mercado donde ocurrió, si aplica |
 | `token_a` | varchar | token de entrada o token A |
 | `amount_a` | decimal(38,7) | en unidades del token, 7 decimales |
@@ -55,6 +55,7 @@ Verificado con sondeos de 7 y 30 días el 2026-09-10 (queries 8666280, 8666378, 
 | FxDAO | `stellar.history_operations` (los contratos no emiten eventos útiles) | `source_account`; la función en `parameters_json_decoded[1].symbol` | vaults: `new_vault`, `increase_collateral`, `increase_debt`, `pay_debt`, `redeem`, `liquidate` → vault_owner / redeemer / liquidator · locking pool: `deposit`, `withdraw` → lp |
 | SushiSwap | eventos de los 58 pools (CLMM estilo Uniswap v3; verificado el 2026-09-22 con 30 días) | `swap`: `data.map.sender`, también cuando rutea el router (el router pasa la wallet como `sender`; su propio evento no se lee). Montos con signo: positivo entra al pool (304 de 304 swaps de un salto coinciden con el `amount_in` del router). `mint`: `sender` (51 de 51 igual al firmante cuando se invoca directo el position manager). `collect`: `recipient`. `burn` no se lee: no trae usuario, va en otra transacción que su `collect` y no mueve tokens; los tokens salen del pool en el `collect` | `swap` → swapper · `add_liquidity` (mint), `collect` → lp |
 | Etherfuse | `stellar.history_operations` y `stellar.history_trades` filtradas por el issuer | `source_account`, `from`, `to`, cuentas de cada trade | payment desde el issuer → minter (el receptor) · payment hacia el issuer → redeemer · otros payments → holder · trades → trader |
+| DeFindex | la tabla de eventos de vaults ya decodificada, `dune.paltalabs.result_de_findex_vaults_events` (query pública 5900680, que mantiene el pipeline del dashboard de DeFindex), sin leer eventos crudos | `to` del evento: quien deposita, o quien recibe el retiro | `deposit`, `withdraw` → vault_depositor. Las transferencias de shares entre direcciones no cuentan |
 
 ## Descubrimiento de pools
 

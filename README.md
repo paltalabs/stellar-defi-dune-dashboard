@@ -1,9 +1,11 @@
 # Stellar DeFi Dune Dashboards
 
 Verifiable on-chain metrics for the DeFi protocols on Stellar: Blend, FxDAO, Soroswap (AMM and aggregator), Aquarius,
-Phoenix, Etherfuse and SushiSwap. Built by [PaltaLabs](https://github.com/paltalabs).
+Phoenix, Etherfuse, SushiSwap and DeFindex. Built by [PaltaLabs](https://github.com/paltalabs).
 
 **Dashboard:** https://dune.com/paltalabs/stellar-defi
+
+**Want your protocol or project tracked?** [Open an issue](https://github.com/paltalabs/stellar-defi-dune-dashboard/issues/new) with its name, its contract addresses and what counts as a user action.
 
 ## Weekly and Monthly Active Users
 

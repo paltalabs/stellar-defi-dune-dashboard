@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8798721
 -- Matview: dune.paltalabs.result_scf_integrity   cron: 0 9 * * 1
--- Última ejecución: 01M4BZM85Y4AMRGW798YGAN256
--- Costo: 1.573 cr; filas: 9; engine medium
+-- Última ejecución: 01M4DZ37Y6R1SXNK8DA5DXZ2SC
+-- Costo: 1.243 cr; filas: 10; engine medium
 -- Activity concentration per protocol vs all protocols, last 28 complete days (UTC).
 WITH act AS (
 SELECT CASE WHEN protocol = 'soroswap' THEN CASE WHEN role = 'aggregator_user' THEN 'soroswap_aggregator' ELSE 'soroswap_amm' END ELSE protocol END AS protocol, user_address, closed_at FROM dune.paltalabs.result_scf_blend_activity_archive WHERE row_kind = 'activity' AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) >= CURRENT_DATE - INTERVAL '28' DAY AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) < CURRENT_DATE
@@ -31,6 +31,10 @@ UNION ALL
 SELECT CASE WHEN protocol = 'soroswap' THEN CASE WHEN role = 'aggregator_user' THEN 'soroswap_aggregator' ELSE 'soroswap_amm' END ELSE protocol END AS protocol, user_address, closed_at FROM dune.paltalabs.result_scf_sushiswap_activity_archive WHERE row_kind = 'activity' AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) >= CURRENT_DATE - INTERVAL '28' DAY AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) < CURRENT_DATE
 UNION ALL
 SELECT CASE WHEN protocol = 'soroswap' THEN CASE WHEN role = 'aggregator_user' THEN 'soroswap_aggregator' ELSE 'soroswap_amm' END ELSE protocol END AS protocol, user_address, closed_at FROM dune.paltalabs.result_scf_sushiswap_activity WHERE row_kind = 'activity' AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) >= CURRENT_DATE - INTERVAL '28' DAY AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) < CURRENT_DATE
+UNION ALL
+SELECT CASE WHEN protocol = 'soroswap' THEN CASE WHEN role = 'aggregator_user' THEN 'soroswap_aggregator' ELSE 'soroswap_amm' END ELSE protocol END AS protocol, user_address, closed_at FROM dune.paltalabs.result_scf_defindex_activity_archive WHERE row_kind = 'activity' AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) >= CURRENT_DATE - INTERVAL '28' DAY AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) < CURRENT_DATE
+UNION ALL
+SELECT CASE WHEN protocol = 'soroswap' THEN CASE WHEN role = 'aggregator_user' THEN 'soroswap_aggregator' ELSE 'soroswap_amm' END ELSE protocol END AS protocol, user_address, closed_at FROM dune.paltalabs.result_scf_defindex_activity WHERE row_kind = 'activity' AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) >= CURRENT_DATE - INTERVAL '28' DAY AND CAST(closed_at AT TIME ZONE 'UTC' AS DATE) < CURRENT_DATE
 ), per_addr AS (
   SELECT protocol, user_address, COUNT(*) AS actions FROM act GROUP BY 1, 2
   UNION ALL
