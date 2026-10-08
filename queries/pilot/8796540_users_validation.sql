@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796540
 -- Matview: dune.paltalabs.result_scf_users_validation   cron: 0 10 * * *
--- Última ejecución: 01M4BZNPFBVFHHKMPPKCYP917J
--- Costo: 4.072 cr; filas: 9; engine medium
+-- Última ejecución: 01M4DZ3TT7YVBE7NGAA0CDP1S3
+-- Costo: n/d cr; filas: 9; engine medium
 WITH users AS (SELECT * FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity'),
 duplicate_keys AS (
   SELECT protocol, activity_date, user_address, role, COUNT(*) AS n
@@ -15,7 +15,7 @@ SELECT 'invalid_role_or_date', COUNT(*) FROM users WHERE role IS NULL OR activit
 UNION ALL
 SELECT 'out_of_coverage', COUNT(*) FROM users WHERE activity_date < covered_from OR activity_date >= covered_until
 UNION ALL
-SELECT 'missing_protocol_metadata', 8 - COUNT(DISTINCT protocol)
+SELECT 'missing_protocol_metadata', 9 - COUNT(DISTINCT protocol)
 FROM dune.paltalabs.result_scf_users WHERE row_kind = 'metadata'
 UNION ALL
 SELECT 'archive_live_gap', COUNT(*) FROM (
