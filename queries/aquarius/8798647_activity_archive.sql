@@ -68,10 +68,10 @@ UNION ALL
 SELECT 'aquarius', d.contract_id, d.closed_at, d.tx_hash, s.source_account,
        CASE d.action WHEN 'deposit_liquidity' THEN 'pool_deposit' ELSE 'pool_withdraw' END, 'lp', d.contract_id,
        json_extract_scalar(d.topics_decoded, '$[1].address'),
-       CAST(CASE d.action WHEN 'deposit_liquidity' THEN TRY(CAST(COALESCE(json_extract_scalar(d.data_decoded, '$.vec[0].i128'), json_extract_scalar(d.data_decoded, '$.vec[0].u128')) AS DECIMAL(38,0))) ELSE TRY(CAST(COALESCE(json_extract_scalar(d.data_decoded, '$.vec[1].i128'), json_extract_scalar(d.data_decoded, '$.vec[1].u128')) AS DECIMAL(38,0))) END
+       CAST(TRY(CAST(COALESCE(json_extract_scalar(d.data_decoded, '$.vec[1].i128'), json_extract_scalar(d.data_decoded, '$.vec[1].u128')) AS DECIMAL(38,0)))
             * DECIMAL '0.0000001' AS DECIMAL(38,7)),
        json_extract_scalar(d.topics_decoded, '$[2].address'),
-       CAST(CASE d.action WHEN 'deposit_liquidity' THEN TRY(CAST(COALESCE(json_extract_scalar(d.data_decoded, '$.vec[1].i128'), json_extract_scalar(d.data_decoded, '$.vec[1].u128')) AS DECIMAL(38,0))) ELSE TRY(CAST(COALESCE(json_extract_scalar(d.data_decoded, '$.vec[2].i128'), json_extract_scalar(d.data_decoded, '$.vec[2].u128')) AS DECIMAL(38,0))) END
+       CAST(TRY(CAST(COALESCE(json_extract_scalar(d.data_decoded, '$.vec[2].i128'), json_extract_scalar(d.data_decoded, '$.vec[2].u128')) AS DECIMAL(38,0)))
             * DECIMAL '0.0000001' AS DECIMAL(38,7))
 FROM direct_lp d JOIN signer s ON s.transaction_id = d.transaction_id
 )
