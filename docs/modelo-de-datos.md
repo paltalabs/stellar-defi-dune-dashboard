@@ -59,7 +59,7 @@ Verificado con sondeos de 7 y 30 días el 2026-09-10 (queries 8666280, 8666378, 
 
 ## Descubrimiento de pools
 
-`result_scf_contracts` (query `SCF35 · contract registry`, cron lunes 02:00 UTC) descubre los
+`result_scf_contracts` (query `Stellar DeFi · contract registry`, cron lunes 02:00 UTC) descubre los
 pools desde el storage de las factories y desde los eventos `add_pool` de los routers de
 Aquarius. El primer escaneo desde 2024 costó 78,9 cr; desde entonces se lee a sí mismo y solo
 mira los últimos 14 días (3,9 cr). Al 2026-09-22: 27 pools de Blend, 214 pares de Soroswap,
@@ -120,3 +120,68 @@ dashboard):
   concentración, no solo WAU. Para "cuánta gente usa el ecosistema", el WAU/MAU del ecosistema
   (direcciones únicas entre protocolos) y separar G de C.
 - El volumen en USD es de la actividad de LPs (necesita precios) y no está en esta tabla.
+
+## Solapamiento entre protocolos
+
+Cuatro tablas sobre `result_scf_users`, sin tablas crudas (`scripts/pilot_sql.py`):
+
+- `result_scf_overlap_matrix`: para cada par (A, B), cuántas direcciones de A también usaron B, en
+  toda la historia y en los últimos 90 y 28 días. La diagonal son las direcciones de A (el check
+  `overlap_diagonal_vs_health` la compara con la tabla de salud). La matriz no es simétrica en
+  porcentaje: `share_of_a` se divide por las direcciones de A.
+- `result_scf_protocol_count`: cuántos protocolos usó cada dirección (1, 2, 3, 4+).
+- `result_scf_first_protocol`: el protocolo de entrada es el del primer día en que la dirección
+  aparece en cualquiera de los protocolos desde 2024-02-01. Si ese día aparece en dos, es `multiple`.
+  No es la creación de la cuenta, y SushiSwap solo puede ser de entrada desde 2026-03.
+- `result_scf_journeys`: del primer protocolo al segundo, por primer día visto en cada uno;
+  `none` = nunca usó un segundo protocolo.
+
+Las cuatro suman las mismas direcciones únicas (check `overlap_totals`). Los contratos
+intermediarios generan solapamiento artificial: un pool de Aquarius que recibe un swap del
+aggregator de Soroswap registra al contrato como usuario de Aquarius. Por eso las columnas solo G
+son la lectura principal.
+
+## Precios
+
+`result_scf_token_prices` (`scripts/prices_sql.py`) guarda un precio en USD por día y token, solo
+los días con precio observado (sin relleno).
+
+- **Tokens.** `data/tokens.csv` lista cada token de las filas de swap y LP. Un SAC se une a su
+  asset clásico (`CODE:ISSUER` o `native`): primero por `asset_code`/`asset_issuer` de
+  `stellar.contract_data`, y si su instancia es anterior a 2024 (XLM, sUSD), con el id derivado
+  offline en `scripts/sac.py` (sha256 del preimage `FROM_ASSET`, validado 253 de 253). Los tokens
+  wasm llevan los decimales de su METADATA: hay tokens de 6, 8, 9 y 18 decimales, y las capas
+  guardan `raw * 1e-7`, así que el monto real es `amount * 10^(7 - decimals)`.
+- **Fuente.** VWAP diario del SDEX (`stellar.history_trades`) contra USDC de Circle; si ese día no
+  hay USD 50 de volumen contra USDC, VWAP contra XLM por el XLM/USDC del día. Los tokens sin
+  mercado en el SDEX toman el precio implícito de sus swaps Soroban de las capas contra un token
+  con precio SDEX (`price_source = soroban_swaps`), con el mismo mínimo de volumen.
+- **Operación.** El build escanea el SDEX desde 2024-02-01 (45,5 cr). Después la matview se lee a
+  sí misma y recalcula los últimos 7 días (1,73 cr por día).
+- **Verificación.** Contra CoinGecko en 365 días: XLM, desvío mediano 0,98%; AQUA, 0,77%.
+
+## Actividad de LPs
+
+LP son las acciones con `role = 'lp'` de los AMMs: Aquarius, Soroswap, Phoenix, SushiSwap y el
+locking pool de FxDAO. Blend (supply/borrow) no cuenta como LP. `result_scf_lp_tx` valoriza cada
+acción con el último precio de hasta 7 días antes:
+
+| Acción | Dirección |
+|---|---|
+| `deposit`, `pool_deposit`, `provide_liquidity`, `add_liquidity`, `locking_deposit` | add |
+| `withdraw`, `pool_withdraw`, `withdraw_liquidity`, `remove_liquidity`, `locking_withdraw`, `collect` | remove |
+| `position_update` (Aquarius, sin tokens) | other |
+
+Reglas de valorización (`usd_method`):
+
+- `sum`: suma de los dos lados. Es la regla normal y la única en SushiSwap: en liquidez
+  concentrada, una posición de un solo lado es legítima. En Sushi, `collect` incluye los fees ganados.
+- `capped_2x_min`: en pools de producto constante o stable, los dos lados valen parecido. Si
+  difieren más de 10×, el precio de un token ilíquido está mal y cuenta 2 × el menor.
+- `one_leg_2x`: si un solo lado tiene precio, cuenta 2 × ese lado.
+- `legacy_2x_a`: los `pool_deposit` de Aquarius anteriores a 2026-09-01 se leyeron como `[a, b,
+  shares]` cuando el evento es `[shares, a, b]`. En esas filas `amount_a` son shares y `amount_b`
+  es el monto de A; se valorizan como 2 × A. Desde 2026-09-01 la capa guarda los montos correctos.
+  El tercer token de los pools de 3 tokens no se guarda.
+
+FxDAO no trae montos por token en sus operaciones: sus acciones cuentan como LP activo, sin USD.
