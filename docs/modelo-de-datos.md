@@ -71,6 +71,12 @@ costó 0,198 cr con subquery y 0,057 con lista literal. El check `unregistered_c
 `result_scf_users_validation` da mayor que 0 cuando el registro encuentra un contrato que el SQL
 todavía no incluye; el arreglo es `export-registry` y volver a desplegar las capas.
 
+Al 2026-10-19 el registro tiene 455 pools de Aquarius (24 nuevos desde el 2026-09-24) y 60 de
+SushiSwap (2 nuevos). Las capas se volvieron a desplegar ese día. Un pool nuevo entra a la capa
+viva desde el `covered_until` del archive, no desde su creación: los 9 pools de Aquarius creados
+entre el 2026-09-24 y el 2026-09-30 cuentan desde el 2026-10-01, porque el archive ya había cerrado
+septiembre sin ellos. Recuperar esa semana exige reconstruir el archive completo.
+
 | Protocolo | Dónde | Forma |
 |---|---|---|
 | Blend | factories v1 y v2 | key `{"vec":[{"symbol":"Contracts"},{"address":"<pool>"}]}`, 15 pools v1 y 12 v2 al 2026-09-10 |
