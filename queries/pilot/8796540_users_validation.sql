@@ -1,8 +1,7 @@
 -- Query: https://dune.com/queries/8796540
 -- Matview: dune.paltalabs.result_scf_users_validation   cron: 0 10 * * *
--- Última ejecución: 01M4DZ3TT7YVBE7NGAA0CDP1S3 (2026-10-08). Este SQL suma los chequeos de solapamiento y LPs;
--- confirmar que Dune corre esta versión y, si no, redesplegar con `metric users_validation`.
--- Costo: n/d cr; filas: 9; engine medium
+-- Última ejecución: 01M59X5VMCT8Y2PENGC2DZJ7A7
+-- Costo: 1.069 cr; filas: 13; engine medium
 WITH users AS (SELECT * FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity'),
 duplicate_keys AS (
   SELECT protocol, activity_date, user_address, role, COUNT(*) AS n
@@ -26,7 +25,7 @@ SELECT 'archive_live_gap', COUNT(*) FROM (
       OR MAX(covered_until) FILTER (WHERE source_layer = 'archive') < MAX(covered_from) FILTER (WHERE source_layer = 'live')
 )
 UNION ALL
-SELECT 'unregistered_contracts', COUNT(DISTINCT contract_id) - 744 FROM dune.paltalabs.result_scf_contracts
+SELECT 'unregistered_contracts', COUNT(DISTINCT contract_id) - 770 FROM dune.paltalabs.result_scf_contracts
 UNION ALL
 SELECT 'cohort_partition_weekly', COUNT(*) FROM dune.paltalabs.result_scf_users_weekly
 WHERE new_observed + returning_observed <> active_addresses OR g_addresses + c_addresses <> active_addresses
@@ -78,4 +77,8 @@ SELECT 1 AS one FROM dune.paltalabs.result_scf_etherfuse_activity WHERE row_kind
 UNION ALL
 SELECT 1 AS one FROM dune.paltalabs.result_scf_sushiswap_activity_archive WHERE row_kind = 'activity' AND role = 'lp'
 UNION ALL
-SELECT 1 AS one FROM dune.paltalabs.result_scf_sushiswap_activity WHERE row_kind = 'activity' AND role = 'lp') AS x))
+SELECT 1 AS one FROM dune.paltalabs.result_scf_sushiswap_activity WHERE row_kind = 'activity' AND role = 'lp'
+UNION ALL
+SELECT 1 AS one FROM dune.paltalabs.result_scf_defindex_activity_archive WHERE row_kind = 'activity' AND role = 'lp'
+UNION ALL
+SELECT 1 AS one FROM dune.paltalabs.result_scf_defindex_activity WHERE row_kind = 'activity' AND role = 'lp') AS x))
