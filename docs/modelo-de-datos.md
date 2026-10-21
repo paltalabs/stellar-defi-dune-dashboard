@@ -73,9 +73,11 @@ todavía no incluye; el arreglo es `export-registry` y volver a desplegar las ca
 
 Al 2026-10-19 el registro tiene 455 pools de Aquarius (24 nuevos desde el 2026-09-24) y 60 de
 SushiSwap (2 nuevos). Las capas se volvieron a desplegar ese día. Un pool nuevo entra a la capa
-viva desde el `covered_until` del archive, no desde su creación: los 9 pools de Aquarius creados
-entre el 2026-09-24 y el 2026-09-30 cuentan desde el 2026-10-01, porque el archive ya había cerrado
-septiembre sin ellos. Recuperar esa semana exige reconstruir el archive completo.
+viva desde el `covered_until` del archive, no desde su creación. Si el archive ya cerró el mes en
+que nació el pool, `activity_sql.pool_backfill(protocolo, inicio, fin)` agrega al archive solo las
+filas de los pools creados en esa ventana, escaneando esa ventana y no la historia completa. Así se
+recuperó el 2026-10-21 la última semana de septiembre de los 9 pools de Aquarius creados entre el
+2026-09-24 y el 2026-09-30 (29 acciones).
 
 | Protocolo | Dónde | Forma |
 |---|---|---|
