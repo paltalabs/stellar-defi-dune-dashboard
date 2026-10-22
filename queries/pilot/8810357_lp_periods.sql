@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8810357
 -- Matview: dune.paltalabs.result_scf_lp_periods   cron: 0 9 * * *
--- Última ejecución: 01M358RZ76VZAM2GCZ6XXJV1JD
--- Costo: 2.842 cr; filas: 754; engine medium
+-- Última ejecución: 01M5JYGWZ1EHPP4B0YXYCX88BC
+-- Costo: 1.07 cr; filas: 780; engine medium
 -- Active LPs and USD added/removed per calendar week and month (UTC), per protocol and all AMMs.
 WITH tx AS (SELECT * FROM dune.paltalabs.result_scf_lp_tx WHERE day < CURRENT_DATE),
 grains AS (

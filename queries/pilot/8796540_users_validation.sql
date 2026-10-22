@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796540
 -- Matview: dune.paltalabs.result_scf_users_validation   cron: 0 10 * * *
--- Última ejecución: 01M5J9AB8P4CAKXT2VB61WA8MA
--- Costo: 1.139 cr; filas: 13; engine medium
+-- Última ejecución: 01M5JYKZ04BK1W9RW76TGFMMNY
+-- Costo: 1.123 cr; filas: 13; engine medium
 WITH users AS (SELECT * FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity'),
 duplicate_keys AS (
   SELECT protocol, activity_date, user_address, role, COUNT(*) AS n

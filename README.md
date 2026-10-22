@@ -1,11 +1,26 @@
-# Stellar DeFi Dune Dashboards
+# Stellar DeFi Pulse
 
-Verifiable on-chain metrics for the DeFi protocols on Stellar: Blend, FxDAO, Soroswap (AMM and aggregator), Aquarius,
-Phoenix, Etherfuse, SushiSwap and DeFindex. Built by [PaltaLabs](https://github.com/paltalabs).
+**Who actually uses DeFi on Stellar, and where does the money go?**
 
 **Dashboard:** https://dune.com/paltalabs/stellar-defi
 
-**Want your protocol or project tracked?** [Open an issue](https://github.com/paltalabs/stellar-defi-dune-dashboard/issues/new) with its name, its contract addresses and what counts as a user action.
+One live dashboard for the whole ecosystem: eight protocols, every address since February 2024, read
+straight from the chain.
+
+- **Users.** Weekly and monthly active addresses across protocols, with new vs returning and growth.
+- **Journeys.** Which protocols share users, which ones bring newcomers into Stellar DeFi, and where
+  those users go next.
+- **Liquidity.** Who provides liquidity in Stellar's AMMs, how many dollars come in and out, and the
+  largest LPs and moves.
+
+No self-reported numbers: every figure comes from Soroban events and Stellar operations, refreshes
+daily and passes a daily validation. This repository has all the SQL and the methodology.
+
+Tracked today: Blend, Aquarius, Soroswap (AMM and aggregator), Phoenix, SushiSwap, FxDAO, Etherfuse
+and DeFindex. **Want your protocol tracked?** [Open an issue](https://github.com/paltalabs/stellar-defi-dune-dashboard/issues/new)
+with its name, its contract addresses and what counts as a user action.
+
+*Built by [PaltaLabs](https://paltalabs.io), the team behind Soroswap and DeFindex.*
 
 ## Weekly and Monthly Active Users
 
@@ -16,12 +31,26 @@ Phoenix, Etherfuse, SushiSwap and DeFindex. Built by [PaltaLabs](https://github.
 - Week-over-week and month-over-month growth
 - Data coverage, pipeline health and validation
 
+## User overlap between protocols
+
+- Protocol x protocol matrix of shared addresses (all history, last 90 and 28 days)
+- Addresses by number of protocols used
+- Entry protocol: which protocol brought each address into Stellar DeFi
+- Journeys from the first protocol to the second, with the median days between them
+
+## Liquidity providers
+
+- Every add and remove liquidity action in the AMMs, valued in USD with an on-chain daily price table
+- Active LPs per week and month, top LPs, USD added, removed and net flow per AMM
+- Valuation coverage per protocol
+
 ## How it works
 
 1. **Source.** Soroban contract events and classic Stellar operations, read from Dune's
    `stellar.*` tables. No protocol-reported data.
 2. **User.** A Stellar address that performs a protocol action (swap, add or remove liquidity,
-   supply, borrow, repay, liquidation, claim, mint, redeem, trade). Classic accounts (`G...`) and
+   supply, borrow, repay, liquidation, claim, mint, redeem, vault deposit or withdrawal). Trading
+   Etherfuse bonds on the SDEX is not counted as use of the protocol. Classic accounts (`G...`) and
    contracts / smart wallets (`C...`) are counted and shown separately.
 3. **Layers.** Per protocol, a full-history archive (since February 2024) and a live layer
    refreshed daily, both Dune materialized views. Every chart reads one normalized table of
