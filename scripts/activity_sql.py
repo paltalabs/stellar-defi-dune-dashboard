@@ -232,9 +232,8 @@ def aquarius(win):
     moves the position. Pool deposit and withdraw data are both [shares, a, b(, c)]: verified 2026-09-22
     against the token transfers of the same tx on 7 dates from 2024-11 to 2026-09 (query 8810390, a
     = vec[1] in every event, never vec[0]) and on 2026-10-22 for every pool version and route
-    (query 8993709). Until 2026-09 deposits were read as [a, b, shares]: rows before 2026-09-01 in
-    the archive keep shares in amount_a and token a's amount in amount_b (prices_sql.lp_tx corrects
-    the valuation). The third token of 3-token pools is not kept. Measured 2026-09-22 on one day:
+    (query 8993709). Until 2026-09 deposits were read as [a, b, shares]; the archive was rebuilt with
+    the right layout on 2026-10-22. The third token of 3-token pools is not kept. Measured 2026-09-22 on one day:
     1,78 cr; deduplicating on extracted fields instead of the raw event measured worse (2,98) and
     was reverted."""
     pools = [r['contract_id'] for r in contracts('aquarius', 'pool')]

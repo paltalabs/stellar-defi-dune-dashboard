@@ -27,7 +27,8 @@ LP_TX = 'dune.paltalabs.result_scf_lp_tx'
 LP_ADD = ('deposit', 'pool_deposit', 'provide_liquidity', 'add_liquidity', 'locking_deposit')
 # Aquarius pool deposits before this date were parsed as [a, b, shares] instead of [shares, a, b]:
 # amount_a holds LP shares and amount_b holds token a's amount; token b's amount was not kept.
-AQUARIUS_DEPOSIT_FIXED_FROM = '2026-09-01'
+# The archive was rebuilt on 2026-10-22 with the right layout, so no row is legacy any more.
+AQUARIUS_DEPOSIT_FIXED_FROM = START
 MAX_LEG_RATIO = 10           # AMM legs further apart than this: a leg price is wrong, value 2 x the smaller
 LP_REMOVE = ('withdraw', 'pool_withdraw', 'withdraw_liquidity', 'remove_liquidity', 'locking_withdraw', 'collect')
 SWAP_ROLES = ('swapper', 'aggregator_user')
@@ -321,10 +322,12 @@ GROUP BY 1, 2 ORDER BY 1, 2
 
 
 def chart_lp_periods(grain):
-    return f"""-- Chart source: active LPs and USD added/removed per complete calendar {grain}.
+    return f"""-- Chart source: active LPs and USD added/removed per complete calendar {grain}, one row per AMM.
+-- Charted as stacked columns: the column is the total and each color one AMM's share. The
+-- 'all AMMs' row (unique LPs across AMMs) stays in result_scf_lp_periods, out of the stack.
 SELECT period_start, protocol, active_lps, g_lps, lp_actions, usd_added, usd_removed, usd_net, priced_action_share
 FROM dune.paltalabs.result_scf_lp_periods
-WHERE grain = '{grain}' AND is_complete
+WHERE grain = '{grain}' AND is_complete AND protocol <> 'all AMMs'
 ORDER BY period_start, protocol
 """
 
