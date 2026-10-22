@@ -327,7 +327,7 @@ def chart_lp_periods(grain):
 -- 'all AMMs' row (unique LPs across AMMs) stays in result_scf_lp_periods, out of the stack.
 SELECT period_start, protocol, active_lps, g_lps, lp_actions, usd_added, usd_removed, usd_net, priced_action_share
 FROM dune.paltalabs.result_scf_lp_periods
-WHERE grain = '{grain}' AND is_complete AND protocol <> 'all AMMs'
+WHERE grain = '{grain}' AND is_complete AND protocol <> 'all AMMs' AND period_start >= {activity_sql.chart_since(grain)}
 ORDER BY period_start, protocol
 """
 
