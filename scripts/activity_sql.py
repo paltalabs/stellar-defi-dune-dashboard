@@ -13,6 +13,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PROTOCOLS = ('blend', 'aquarius', 'soroswap', 'phoenix', 'fxdao', 'etherfuse', 'sushiswap', 'defindex')
 HISTORY_START = '2024-02-01'
+# Weekly charts zoom into the last 13 complete weeks (about three months); monthly charts keep
+# the whole history.
+WEEKLY_CHART_WEEKS = 13
+
+
+def chart_since(grain):
+    """First period a chart shows, as a SQL date: the full history for months, the last
+    WEEKLY_CHART_WEEKS complete weeks for weeks."""
+    if grain == 'week':
+        return f"date_add('week', -{WEEKLY_CHART_WEEKS}, CAST(date_trunc('week', CURRENT_DATE) AS DATE))"
+    return f"DATE '{HISTORY_START}'"
 # SushiSwap's factory first appears on 2026-03-02: its archive starts there instead of scanning 2024.
 SUSHI_START = '2026-03-01'
 # DeFindex vaults went live in May 2025.

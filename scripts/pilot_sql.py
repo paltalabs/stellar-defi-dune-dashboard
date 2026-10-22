@@ -359,22 +359,22 @@ SELECT 'lp_tx_vs_layers', ABS((SELECT COUNT(*) FROM dune.paltalabs.result_scf_lp
 
 def chart_protocol(grain):
     # Matview executions only persist a row count, so charts need their own SELECT.
-    return f"""-- Chart source: complete calendar {grain}s since 2024-02-01, one row per protocol.
+    return f"""-- Chart source: complete calendar {grain}s (months since 2024-02-01, the last 13 weeks), one row per protocol.
 SELECT period_start, protocol, active_addresses, g_addresses, c_addresses,
        new_observed, returning_observed, growth_rate
 FROM dune.paltalabs.result_scf_users_{grain}ly
-WHERE is_complete AND period_start >= DATE '{HISTORY_START}'
+WHERE is_complete AND period_start >= {__import__('activity_sql').chart_since(grain)}
 ORDER BY period_start, protocol
 """
 
 
 def chart_roles(grain):
-    return f"""-- Chart source: unique addresses per role across all protocols, complete calendar {grain}s.
+    return f"""-- Chart source: unique addresses per role across all protocols, complete calendar {grain}s (weeks: the last 13).
 SELECT CAST(date_trunc('{grain}', activity_date) AS DATE) AS period_start, role,
        COUNT(DISTINCT user_address) AS active_addresses,
        COUNT(DISTINCT CASE WHEN user_address LIKE 'C%' THEN user_address END) AS c_addresses
 FROM dune.paltalabs.result_scf_users
-WHERE row_kind = 'activity' AND activity_date >= DATE '{HISTORY_START}'
+WHERE row_kind = 'activity' AND activity_date >= {__import__('activity_sql').chart_since(grain)}
   AND activity_date < CAST(date_trunc('{grain}', CURRENT_DATE) AS DATE)
 GROUP BY 1, 2
 ORDER BY 1, 2
@@ -392,13 +392,13 @@ ORDER BY h.protocol
 
 
 def chart_ecosystem(grain):
-    return f"""-- Chart source: unique addresses across all protocols, complete calendar {grain}s.
+    return f"""-- Chart source: unique addresses across all protocols, complete calendar {grain}s (weeks: the last 13).
 SELECT CAST(date_trunc('{grain}', activity_date) AS DATE) AS period_start,
        COUNT(DISTINCT user_address) AS active_addresses,
        COUNT(DISTINCT CASE WHEN user_address LIKE 'G%' THEN user_address END) AS g_addresses,
        COUNT(DISTINCT CASE WHEN user_address LIKE 'C%' THEN user_address END) AS c_addresses
 FROM dune.paltalabs.result_scf_users
-WHERE row_kind = 'activity' AND activity_date >= DATE '{HISTORY_START}'
+WHERE row_kind = 'activity' AND activity_date >= {__import__('activity_sql').chart_since(grain)}
   AND activity_date < CAST(date_trunc('{grain}', CURRENT_DATE) AS DATE)
 GROUP BY 1
 ORDER BY 1

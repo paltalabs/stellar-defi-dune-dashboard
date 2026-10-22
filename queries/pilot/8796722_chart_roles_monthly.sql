@@ -1,8 +1,8 @@
 -- Query: https://dune.com/queries/8796722
 -- Matview: None   cron: None
--- Última ejecución: 01M32WY9TYFK3TGAX0AZWGTF0T
--- Costo: 0.084 cr; filas: 320; engine medium
--- Chart source: unique addresses per role across all protocols, complete calendar months.
+-- Última ejecución: 01M5JZ07FT9NAYWJXJGP83W294
+-- Costo: 0.044 cr; filas: 349; engine medium
+-- Chart source: unique addresses per role across all protocols, complete calendar months (weeks: the last 13).
 SELECT CAST(date_trunc('month', activity_date) AS DATE) AS period_start, role,
        COUNT(DISTINCT user_address) AS active_addresses,
        COUNT(DISTINCT CASE WHEN user_address LIKE 'C%' THEN user_address END) AS c_addresses
