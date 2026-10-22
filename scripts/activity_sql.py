@@ -959,13 +959,18 @@ def reported_protocol(protocol='protocol', role='role'):
             f"THEN 'soroswap_aggregator' ELSE 'soroswap_amm' END ELSE {protocol} END")
 
 
+USER_ACTIVITY = "row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')"
+
+
 def users():
     """result_scf_users keeps its schema (daily user grain) so every metric on top is unchanged.
-    Soroswap metadata is repeated for its two reported products."""
+    Soroswap metadata is repeated for its two reported products. Etherfuse SDEX traders are not
+    users of the protocol (decided 2026-10-22): buying and selling the bonds on the DEX is
+    arbitrage or market making, and was 6.613 of its 6.741 addresses. The trades stay in the layer."""
     return f"""-- Daily user grain derived from the normalized activity layers. Soroswap is split into
--- soroswap_amm and soroswap_aggregator by role.
+-- soroswap_amm and soroswap_aggregator by role; Etherfuse SDEX trades do not count as use.
 WITH act AS (
-{all_activity('protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer')}
+{all_activity('protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer', USER_ACTIVITY)}
 ), meta AS (
 {all_activity('protocol, covered_from, covered_until, refreshed_at, source_layer', "row_kind = 'metadata'")}
 )

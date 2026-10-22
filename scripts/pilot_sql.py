@@ -473,7 +473,7 @@ TRACKED = [
     ('phoenix', 'Phoenix', 'AMM', 'Swaps, liquidity provided and withdrawn'),
     ('sushiswap', 'SushiSwap', 'AMM (concentrated liquidity)', 'Swaps, liquidity minted and collected (since March 2026)'),
     ('fxdao', 'FxDAO', 'CDP stablecoins', 'Vault operations, redemptions, liquidations and locking pool'),
-    ('etherfuse', 'Etherfuse', 'Tokenized bonds (classic assets)', 'Mints, redeems, payments and SDEX trades of its stablebonds'),
+    ('etherfuse', 'Etherfuse', 'Tokenized bonds (classic assets)', 'Mints, redeems and transfers of its stablebonds; SDEX trading of the bonds is not counted'),
     ('defindex', 'DeFindex', 'Yield vaults', 'Deposits and withdrawals in DeFindex vaults (since May 2025)'),
 ]
 
