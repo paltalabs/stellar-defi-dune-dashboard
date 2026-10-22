@@ -435,9 +435,9 @@ FROM c
 
 
 def chart_protocol_latest():
-    """Active addresses per protocol in the last complete week and month, plus Soroswap total."""
+    """Active addresses per protocol in the last complete week and month, one row per protocol."""
     return """-- Chart source: active addresses per protocol in the last complete calendar week and month (UTC).
--- Soroswap appears as its two products and as a total: unique addresses across AMM and aggregator.
+-- One row per protocol: Soroswap is its total, unique addresses across the AMM and the aggregator.
 WITH wp AS (SELECT MAX(period_start) AS p FROM dune.paltalabs.result_scf_users_weekly WHERE is_complete),
 mp AS (SELECT MAX(period_start) AS p FROM dune.paltalabs.result_scf_users_monthly WHERE is_complete),
 w AS (
@@ -459,18 +459,17 @@ w AS (
 SELECT m.protocol, COALESCE(w.active_addresses, 0) AS last_week_active, COALESCE(w.g_addresses, 0) AS last_week_g,
        m.active_addresses AS last_month_active, m.g_addresses AS last_month_g
 FROM m LEFT JOIN w ON w.protocol = m.protocol
+WHERE m.protocol NOT IN ('soroswap_amm', 'soroswap_aggregator')
 UNION ALL
-SELECT protocol, last_week_active, last_week_g, last_month_active, last_month_g FROM s
+SELECT 'soroswap', last_week_active, last_week_g, last_month_active, last_month_g FROM s
 ORDER BY last_month_active DESC
 """
 
 
 TRACKED = [
     ('blend', 'Blend', 'Lending', 'Supply, withdraw, borrow, repay, liquidations, backstop deposits and withdrawals'),
-    ('aquarius', 'Aquarius', 'AMM', 'Swaps, liquidity deposits and withdrawals, reward claims'),
-    ('soroswap_total', 'Soroswap (AMM + aggregator)', 'AMM and aggregator', 'Any of the two Soroswap products below; an address using both counts once'),
-    ('soroswap_amm', '  Soroswap AMM', 'AMM', 'Swaps and liquidity on the Soroswap router and pairs'),
-    ('soroswap_aggregator', '  Soroswap Aggregator', 'Aggregator', 'Swaps routed by the aggregator: contracts (all versions), SDEX path payments and multicall swaps built by its API'),
+    ('aquarius', 'Aquarius', 'AMM', 'Swaps, liquidity deposits and withdrawals (also concentrated-liquidity pools), reward claims'),
+    ('soroswap_total', 'Soroswap', 'AMM and aggregator', 'AMM swaps and liquidity, and swaps routed by the aggregator (contracts, SDEX path payments, API multicall). Charts split it into soroswap_amm and soroswap_aggregator; here an address using both counts once'),
     ('phoenix', 'Phoenix', 'AMM', 'Swaps, liquidity provided and withdrawn'),
     ('sushiswap', 'SushiSwap', 'AMM (concentrated liquidity)', 'Swaps, liquidity minted and collected (since March 2026)'),
     ('fxdao', 'FxDAO', 'CDP stablecoins', 'Vault operations, redemptions, liquidations and locking pool'),
@@ -483,7 +482,7 @@ def chart_tracked_protocols():
     """The protocols the dashboard tracks, what counts as activity there, and current coverage."""
     rows = ',\n  '.join(f"('{k}', '{n}', '{c}', '{m}', {i})" for i, (k, n, c, m) in enumerate(TRACKED, 1))
     return f"""-- Chart source: the protocols this dashboard tracks, with what is measured and current coverage.
--- Soroswap appears as its two products and as a total (unique addresses across both).
+-- One row per protocol; Soroswap is its total (unique addresses across the AMM and the aggregator).
 WITH info (protocol, name, category, measured, ord) AS (VALUES
   {rows}
 ), contracts AS (
