@@ -83,7 +83,7 @@ protocols:
     multicall_routers:             # la API armó swaps Soroban con la fee adentro (2025-06 a 2026-09-22)
       - CBZV3HBP672BV7FF3ZILVT4CNPW3N5V2WTJ2LAGOAYW5R7L2D5SLUDFZ
       - CDAW42JDSDEI2DXEPP4E7OAYNCRUA4LGCZHXCJ4BV5WVI4O4P77FO4UV
-    fee_receiver: <SOROSWAP_FEE_RECEIVER>
+    # fee account that marks the multicall txs: not published (activity_sql.SOROSWAP_FEE_RECEIVER)
     pairs: discovered from factory storage, see dune.paltalabs.result_soroswap_pools_filtered_tokens (paltalabs/dune-dashboards)
     aggregator_protocol_ids: {0: soroswap, 1: phoenix, 2: aquarius, 3: comet}
 
