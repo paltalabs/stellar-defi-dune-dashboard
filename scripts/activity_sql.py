@@ -13,6 +13,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PROTOCOLS = ('blend', 'aquarius', 'soroswap', 'phoenix', 'fxdao', 'etherfuse', 'sushiswap', 'defindex')
 HISTORY_START = '2024-02-01'
+# Weekly charts zoom into the last 13 complete weeks (about three months); monthly charts keep
+# the whole history.
+WEEKLY_CHART_WEEKS = 13
+
+
+def chart_since(grain):
+    """First period a chart shows, as a SQL date: the full history for months, the last
+    WEEKLY_CHART_WEEKS complete weeks for weeks."""
+    if grain == 'week':
+        return f"date_add('week', -{WEEKLY_CHART_WEEKS}, CAST(date_trunc('week', CURRENT_DATE) AS DATE))"
+    return f"DATE '{HISTORY_START}'"
 # SushiSwap's factory first appears on 2026-03-02: its archive starts there instead of scanning 2024.
 SUSHI_START = '2026-03-01'
 # DeFindex vaults went live in May 2025.
@@ -74,6 +85,13 @@ def re_contract(value):
 
 def lit(values):
     return ', '.join(f"'{v}'" for v in values)
+
+
+def lit_wrapped(values, per_line=8):
+    """lit() split in lines of per_line values, for the long contract lists: the SQL stays
+    readable and fits tools that cut long lines."""
+    values = list(values)
+    return ',\n      '.join(lit(values[i:i + per_line]) for i in range(0, len(values), per_line))
 
 
 def registry(incremental=True):
@@ -213,43 +231,50 @@ def aquarius(win):
     """Router events plus pool events. In a 7-day sample (2026-09-21) 736 of 904 deposit_liquidity
     txs and 71.851 of 113.543 trade txs had no router event. Pool trade: topics [trade, token_in,
     token_out, caller], the caller is the router itself when routed (dropped here, the router event
-    has the user). deposit/withdraw_liquidity carry no user: the invoking operation's source account
-    is used, looked up only among operations that call a pool directly (a literal contract list, so it
-    prunes; a deposit routed through another contract has no signer here and is not counted). Pool
-    deposit and withdraw data are both [shares, a, b(, c)]: verified 2026-09-22 against the token
-    transfers of the same tx on 7 dates from 2024-11 to 2026-09 (query 8810390, a = vec[1] in every
-    event, never vec[0]). Until then deposits were read as [a, b, shares]: rows before 2026-09-01
-    in the archive keep shares in amount_a and token a's amount in amount_b (prices_sql.lp_tx
-    corrects the valuation). The third token of 3-token pools is not kept. Measured 2026-09-22 on one day: 1,78 cr; deduplicating
-    on extracted fields instead of the raw event measured worse (2,98) and was reverted."""
+    has the user). deposit/withdraw_liquidity carry no user: the source account of the operation
+    that emitted the event is used, whatever contract that operation invoked. Since 2025 most
+    withdrawals reach the pool through a batch contract (CBZX5A64..., `batch`) and, since 2026, the
+    concentrated-liquidity pools through position managers (CCM23MFA..., `exec`); reading only
+    operations that call a pool directly lost them (checked 2026-10-22 on three dates, queries
+    8993675 and 8993709). The concentrated pools also emit position_update [owner] in the same tx
+    as every deposit/withdraw_liquidity; its owner equals the signer in every case checked, so it is
+    not read. A pool deposit or withdrawal is dropped only when a router deposit or withdraw in the
+    same tx already carries it: position managers also swap through the router in the tx that
+    moves the position. Pool deposit and withdraw data are both [shares, a, b(, c)]: verified 2026-09-22
+    against the token transfers of the same tx on 7 dates from 2024-11 to 2026-09 (query 8810390, a
+    = vec[1] in every event, never vec[0]) and on 2026-10-22 for every pool version and route
+    (query 8993709). Until 2026-09 deposits were read as [a, b, shares]; the archive was rebuilt with
+    the right layout on 2026-10-22. The third token of 3-token pools is not kept. Measured 2026-09-22 on one day:
+    1,78 cr; deduplicating on extracted fields instead of the raw event measured worse (2,98) and
+    was reverted."""
     pools = [r['contract_id'] for r in contracts('aquarius', 'pool')]
     i128 = lambda path, col='data_decoded': f"TRY(CAST(COALESCE(json_extract_scalar({col}, '{path}.i128'), json_extract_scalar({col}, '{path}.u128')) AS DECIMAL(38,0)))"
     return f"""WITH ev AS (
   SELECT he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash, he.topics_decoded, he.data_decoded,
          MAX(he.transaction_id) AS transaction_id,
          he.contract_id IN ({lit(AQUARIUS_ROUTERS)}) AS is_router,
-         json_extract_scalar(he.topics_decoded, '$[0].symbol') AS action
+         json_extract_scalar(he.topics_decoded, '$[0].symbol') AS action,
+         MAX(he.operation_id) AS operation_id
   FROM stellar.history_contract_events he
   WHERE {win('he.closed_at_date')}
-    AND he.contract_id IN ({lit(AQUARIUS_ROUTERS + pools)})
+    AND he.contract_id IN ({lit_wrapped(AQUARIUS_ROUTERS + pools)})
     {EVENT_FILTERS}
     AND json_extract_scalar(he.topics_decoded, '$[0].symbol') IN ('swap', 'deposit', 'withdraw', 'claim',
-        'trade', 'deposit_liquidity', 'withdraw_liquidity', 'claim_reward', 'position_update')
+        'trade', 'deposit_liquidity', 'withdraw_liquidity', 'claim_reward')
   GROUP BY 1, 2, 3, 4, 5, 7, 8
 ),
 routed AS (SELECT DISTINCT tx_hash FROM ev WHERE is_router),
-positioned AS (SELECT DISTINCT tx_hash FROM ev WHERE action = 'position_update'),
+routed_lp AS (SELECT DISTINCT tx_hash FROM ev WHERE is_router AND action IN ('deposit', 'withdraw')),
 direct_lp AS (
   SELECT e.* FROM ev e
   WHERE NOT e.is_router AND e.action IN ('deposit_liquidity', 'withdraw_liquidity')
-    AND e.tx_hash NOT IN (SELECT tx_hash FROM routed) AND e.tx_hash NOT IN (SELECT tx_hash FROM positioned)
+    AND e.tx_hash NOT IN (SELECT tx_hash FROM routed_lp)
 ),
 signer AS (
-  SELECT o.transaction_id, MIN(o.source_account) AS source_account
+  SELECT o.id, o.source_account
   FROM stellar.history_operations o
   WHERE {win('o.closed_at_date')} AND o.type_string = 'invoke_host_function'
-    AND o.contract_id IN ({lit(pools)})
-  GROUP BY 1
+    AND o.id IN (SELECT operation_id FROM direct_lp)
 )
 SELECT 'aquarius' AS protocol, contract_id, closed_at, tx_hash,
        json_extract_scalar(topics_decoded, '$[2].address') AS user_address, action,
@@ -278,10 +303,6 @@ SELECT 'aquarius', contract_id, closed_at, tx_hash, json_extract_scalar(topics_d
        NULL, NULL
 FROM ev WHERE NOT is_router AND action = 'claim_reward' AND tx_hash NOT IN (SELECT tx_hash FROM routed)
 UNION ALL
-SELECT 'aquarius', contract_id, closed_at, tx_hash, json_extract_scalar(topics_decoded, '$[1].address'), 'position_update', 'lp',
-       contract_id, NULL, NULL, NULL, NULL
-FROM ev WHERE NOT is_router AND action = 'position_update'
-UNION ALL
 SELECT 'aquarius', d.contract_id, d.closed_at, d.tx_hash, s.source_account,
        CASE d.action WHEN 'deposit_liquidity' THEN 'pool_deposit' ELSE 'pool_withdraw' END, 'lp', d.contract_id,
        json_extract_scalar(d.topics_decoded, '$[1].address'),
@@ -290,7 +311,7 @@ SELECT 'aquarius', d.contract_id, d.closed_at, d.tx_hash, s.source_account,
        json_extract_scalar(d.topics_decoded, '$[2].address'),
        CAST({i128('$.vec[2]', 'd.data_decoded')}
             * DECIMAL '0.0000001' AS DECIMAL(38,7))
-FROM direct_lp d JOIN signer s ON s.transaction_id = d.transaction_id"""
+FROM direct_lp d JOIN signer s ON s.id = d.operation_id"""
 
 
 def soroswap(win):
@@ -883,6 +904,43 @@ FROM meta
 """
 
 
+def lp_repair(protocol, start, until, actions=('pool_deposit', 'pool_withdraw', 'position_update')):
+    """One-off: rewrites in the archive the rows of the given actions in [start, until) with the
+    current SQL, without rescanning the rest of the history. Used for Aquarius on 2026-10-22, when
+    the pool deposits and withdrawals that reach the pool through other contracts started being
+    read (aquarius() docstring). Run it by windows as the archive SQL, then set
+    archive_incremental back. A second run over the same window gives the same table."""
+    own = archive_table(protocol)
+    win = lambda col: f"{col} >= DATE '{start}' AND {col} < DATE '{until}'"
+    in_window = f"closed_at >= TIMESTAMP '{start} 00:00:00 UTC' AND closed_at < TIMESTAMP '{until} 00:00:00 UTC'"
+    return f"""-- Generated by scripts/activity_sql.py (lp_repair). One-off: archive with {', '.join(actions)} of {start} to {until} re-read.
+WITH prev AS (
+  SELECT * FROM {own}
+  WHERE row_kind = 'activity' AND NOT (action IN ({lit(actions)}) AND {in_window})
+),
+meta AS (SELECT * FROM {own} WHERE row_kind = 'metadata'),
+src AS (
+{SOURCES[protocol](win)}
+),
+new_rows AS (
+  SELECT s.* FROM src s
+  WHERE s.action IN ({lit(actions)})
+    AND regexp_like(s.user_address, '^[GC][A-Z2-7]{{55}}$') AND s.role IS NOT NULL
+)
+SELECT protocol, contract_id, closed_at, tx_hash, user_address, action, role, pool, token_a, amount_a, token_b, amount_b,
+       row_kind, covered_from, covered_until, refreshed_at, source_layer
+FROM prev
+UNION ALL
+SELECT n.protocol, n.contract_id, n.closed_at, n.tx_hash, n.user_address, n.action, n.role, n.pool, n.token_a, n.amount_a, n.token_b, n.amount_b,
+       'activity', m.covered_from, m.covered_until, CURRENT_TIMESTAMP, 'archive'
+FROM new_rows n CROSS JOIN meta m
+UNION ALL
+SELECT protocol, contract_id, closed_at, tx_hash, user_address, action, role, pool, token_a, amount_a, token_b, amount_b,
+       row_kind, covered_from, covered_until, CURRENT_TIMESTAMP, source_layer
+FROM meta
+"""
+
+
 def all_activity(columns='*', where="row_kind = 'activity'"):
     """Union of the twelve layers. Archive and live are disjoint by construction (live starts at
     the archive's covered_until), so nothing is deduplicated here."""
@@ -901,13 +959,18 @@ def reported_protocol(protocol='protocol', role='role'):
             f"THEN 'soroswap_aggregator' ELSE 'soroswap_amm' END ELSE {protocol} END")
 
 
+USER_ACTIVITY = "row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')"
+
+
 def users():
     """result_scf_users keeps its schema (daily user grain) so every metric on top is unchanged.
-    Soroswap metadata is repeated for its two reported products."""
+    Soroswap metadata is repeated for its two reported products. Etherfuse SDEX traders are not
+    users of the protocol (decided 2026-10-22): buying and selling the bonds on the DEX is
+    arbitrage or market making, and was 6.613 of its 6.741 addresses. The trades stay in the layer."""
     return f"""-- Daily user grain derived from the normalized activity layers. Soroswap is split into
--- soroswap_amm and soroswap_aggregator by role.
+-- soroswap_amm and soroswap_aggregator by role; Etherfuse SDEX trades do not count as use.
 WITH act AS (
-{all_activity('protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer')}
+{all_activity('protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer', USER_ACTIVITY)}
 ), meta AS (
 {all_activity('protocol, covered_from, covered_until, refreshed_at, source_layer', "row_kind = 'metadata'")}
 )

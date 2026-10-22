@@ -359,22 +359,22 @@ SELECT 'lp_tx_vs_layers', ABS((SELECT COUNT(*) FROM dune.paltalabs.result_scf_lp
 
 def chart_protocol(grain):
     # Matview executions only persist a row count, so charts need their own SELECT.
-    return f"""-- Chart source: complete calendar {grain}s since 2024-02-01, one row per protocol.
+    return f"""-- Chart source: complete calendar {grain}s (months since 2024-02-01, the last 13 weeks), one row per protocol.
 SELECT period_start, protocol, active_addresses, g_addresses, c_addresses,
        new_observed, returning_observed, growth_rate
 FROM dune.paltalabs.result_scf_users_{grain}ly
-WHERE is_complete AND period_start >= DATE '{HISTORY_START}'
+WHERE is_complete AND period_start >= {__import__('activity_sql').chart_since(grain)}
 ORDER BY period_start, protocol
 """
 
 
 def chart_roles(grain):
-    return f"""-- Chart source: unique addresses per role across all protocols, complete calendar {grain}s.
+    return f"""-- Chart source: unique addresses per role across all protocols, complete calendar {grain}s (weeks: the last 13).
 SELECT CAST(date_trunc('{grain}', activity_date) AS DATE) AS period_start, role,
        COUNT(DISTINCT user_address) AS active_addresses,
        COUNT(DISTINCT CASE WHEN user_address LIKE 'C%' THEN user_address END) AS c_addresses
 FROM dune.paltalabs.result_scf_users
-WHERE row_kind = 'activity' AND activity_date >= DATE '{HISTORY_START}'
+WHERE row_kind = 'activity' AND activity_date >= {__import__('activity_sql').chart_since(grain)}
   AND activity_date < CAST(date_trunc('{grain}', CURRENT_DATE) AS DATE)
 GROUP BY 1, 2
 ORDER BY 1, 2
@@ -392,13 +392,13 @@ ORDER BY h.protocol
 
 
 def chart_ecosystem(grain):
-    return f"""-- Chart source: unique addresses across all protocols, complete calendar {grain}s.
+    return f"""-- Chart source: unique addresses across all protocols, complete calendar {grain}s (weeks: the last 13).
 SELECT CAST(date_trunc('{grain}', activity_date) AS DATE) AS period_start,
        COUNT(DISTINCT user_address) AS active_addresses,
        COUNT(DISTINCT CASE WHEN user_address LIKE 'G%' THEN user_address END) AS g_addresses,
        COUNT(DISTINCT CASE WHEN user_address LIKE 'C%' THEN user_address END) AS c_addresses
 FROM dune.paltalabs.result_scf_users
-WHERE row_kind = 'activity' AND activity_date >= DATE '{HISTORY_START}'
+WHERE row_kind = 'activity' AND activity_date >= {__import__('activity_sql').chart_since(grain)}
   AND activity_date < CAST(date_trunc('{grain}', CURRENT_DATE) AS DATE)
 GROUP BY 1
 ORDER BY 1
@@ -435,9 +435,9 @@ FROM c
 
 
 def chart_protocol_latest():
-    """Active addresses per protocol in the last complete week and month, plus Soroswap total."""
+    """Active addresses per protocol in the last complete week and month, one row per protocol."""
     return """-- Chart source: active addresses per protocol in the last complete calendar week and month (UTC).
--- Soroswap appears as its two products and as a total: unique addresses across AMM and aggregator.
+-- One row per protocol: Soroswap is its total, unique addresses across the AMM and the aggregator.
 WITH wp AS (SELECT MAX(period_start) AS p FROM dune.paltalabs.result_scf_users_weekly WHERE is_complete),
 mp AS (SELECT MAX(period_start) AS p FROM dune.paltalabs.result_scf_users_monthly WHERE is_complete),
 w AS (
@@ -459,22 +459,21 @@ w AS (
 SELECT m.protocol, COALESCE(w.active_addresses, 0) AS last_week_active, COALESCE(w.g_addresses, 0) AS last_week_g,
        m.active_addresses AS last_month_active, m.g_addresses AS last_month_g
 FROM m LEFT JOIN w ON w.protocol = m.protocol
+WHERE m.protocol NOT IN ('soroswap_amm', 'soroswap_aggregator')
 UNION ALL
-SELECT protocol, last_week_active, last_week_g, last_month_active, last_month_g FROM s
+SELECT 'soroswap', last_week_active, last_week_g, last_month_active, last_month_g FROM s
 ORDER BY last_month_active DESC
 """
 
 
 TRACKED = [
     ('blend', 'Blend', 'Lending', 'Supply, withdraw, borrow, repay, liquidations, backstop deposits and withdrawals'),
-    ('aquarius', 'Aquarius', 'AMM', 'Swaps, liquidity deposits and withdrawals, reward claims'),
-    ('soroswap_total', 'Soroswap (AMM + aggregator)', 'AMM and aggregator', 'Any of the two Soroswap products below; an address using both counts once'),
-    ('soroswap_amm', '  Soroswap AMM', 'AMM', 'Swaps and liquidity on the Soroswap router and pairs'),
-    ('soroswap_aggregator', '  Soroswap Aggregator', 'Aggregator', 'Swaps routed by the aggregator: contracts (all versions), SDEX path payments and multicall swaps built by its API'),
+    ('aquarius', 'Aquarius', 'AMM', 'Swaps, liquidity deposits and withdrawals (also concentrated-liquidity pools), reward claims'),
+    ('soroswap_total', 'Soroswap', 'AMM and aggregator', 'AMM swaps and liquidity, and swaps routed by the aggregator (contracts, SDEX path payments, API multicall). Charts split it into soroswap_amm and soroswap_aggregator; here an address using both counts once'),
     ('phoenix', 'Phoenix', 'AMM', 'Swaps, liquidity provided and withdrawn'),
     ('sushiswap', 'SushiSwap', 'AMM (concentrated liquidity)', 'Swaps, liquidity minted and collected (since March 2026)'),
     ('fxdao', 'FxDAO', 'CDP stablecoins', 'Vault operations, redemptions, liquidations and locking pool'),
-    ('etherfuse', 'Etherfuse', 'Tokenized bonds (classic assets)', 'Mints, redeems, payments and SDEX trades of its stablebonds'),
+    ('etherfuse', 'Etherfuse', 'Tokenized bonds (classic assets)', 'Mints, redeems and transfers of its stablebonds; SDEX trading of the bonds is not counted'),
     ('defindex', 'DeFindex', 'Yield vaults', 'Deposits and withdrawals in DeFindex vaults (since May 2025)'),
 ]
 
@@ -483,7 +482,7 @@ def chart_tracked_protocols():
     """The protocols the dashboard tracks, what counts as activity there, and current coverage."""
     rows = ',\n  '.join(f"('{k}', '{n}', '{c}', '{m}', {i})" for i, (k, n, c, m) in enumerate(TRACKED, 1))
     return f"""-- Chart source: the protocols this dashboard tracks, with what is measured and current coverage.
--- Soroswap appears as its two products and as a total (unique addresses across both).
+-- One row per protocol; Soroswap is its total (unique addresses across the AMM and the aggregator).
 WITH info (protocol, name, category, measured, ord) AS (VALUES
   {rows}
 ), contracts AS (
