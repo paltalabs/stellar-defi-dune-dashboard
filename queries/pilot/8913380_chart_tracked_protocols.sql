@@ -1,20 +1,18 @@
 -- Query: https://dune.com/queries/8913380
--- Matview: ninguna (gráfico)
--- Última ejecución: 01M4DZ3VM2NZ3QR8WNBM50KWMB
--- Costo: 0.282 cr; filas: 10; engine medium
+-- Matview: None   cron: None
+-- Última ejecución: 01M5JYK1DJW7CK4ESQ43ZJ68YW
+-- Costo: 0.342 cr; filas: 8; engine medium
 -- Chart source: the protocols this dashboard tracks, with what is measured and current coverage.
--- Soroswap appears as its two products and as a total (unique addresses across both).
+-- One row per protocol; Soroswap is its total (unique addresses across the AMM and the aggregator).
 WITH info (protocol, name, category, measured, ord) AS (VALUES
   ('blend', 'Blend', 'Lending', 'Supply, withdraw, borrow, repay, liquidations, backstop deposits and withdrawals', 1),
-  ('aquarius', 'Aquarius', 'AMM', 'Swaps, liquidity deposits and withdrawals, reward claims', 2),
-  ('soroswap_total', 'Soroswap (AMM + aggregator)', 'AMM and aggregator', 'Any of the two Soroswap products below; an address using both counts once', 3),
-  ('soroswap_amm', '  Soroswap AMM', 'AMM', 'Swaps and liquidity on the Soroswap router and pairs', 4),
-  ('soroswap_aggregator', '  Soroswap Aggregator', 'Aggregator', 'Swaps routed by the aggregator: contracts (all versions), SDEX path payments and multicall swaps built by its API', 5),
-  ('phoenix', 'Phoenix', 'AMM', 'Swaps, liquidity provided and withdrawn', 6),
-  ('sushiswap', 'SushiSwap', 'AMM (concentrated liquidity)', 'Swaps, liquidity minted and collected (since March 2026)', 7),
-  ('fxdao', 'FxDAO', 'CDP stablecoins', 'Vault operations, redemptions, liquidations and locking pool', 8),
-  ('etherfuse', 'Etherfuse', 'Tokenized bonds (classic assets)', 'Mints, redeems, payments and SDEX trades of its stablebonds', 9),
-  ('defindex', 'DeFindex', 'Yield vaults', 'Deposits and withdrawals in DeFindex vaults (since May 2025)', 10)
+  ('aquarius', 'Aquarius', 'AMM', 'Swaps, liquidity deposits and withdrawals (also concentrated-liquidity pools), reward claims', 2),
+  ('soroswap_total', 'Soroswap', 'AMM and aggregator', 'AMM swaps and liquidity, and swaps routed by the aggregator (contracts, SDEX path payments, API multicall). Charts split it into soroswap_amm and soroswap_aggregator; here an address using both counts once', 3),
+  ('phoenix', 'Phoenix', 'AMM', 'Swaps, liquidity provided and withdrawn', 4),
+  ('sushiswap', 'SushiSwap', 'AMM (concentrated liquidity)', 'Swaps, liquidity minted and collected (since March 2026)', 5),
+  ('fxdao', 'FxDAO', 'CDP stablecoins', 'Vault operations, redemptions, liquidations and locking pool', 6),
+  ('etherfuse', 'Etherfuse', 'Tokenized bonds (classic assets)', 'Mints, redeems, payments and SDEX trades of its stablebonds', 7),
+  ('defindex', 'DeFindex', 'Yield vaults', 'Deposits and withdrawals in DeFindex vaults (since May 2025)', 8)
 ), contracts AS (
   SELECT protocol, COUNT(DISTINCT contract_id) AS registry_contracts FROM dune.paltalabs.result_scf_contracts GROUP BY 1
   UNION ALL

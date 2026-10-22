@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8810359
 -- Matview: dune.paltalabs.result_scf_lp_top   cron: 0 9 * * *
--- Última ejecución: 01M358SPT0468AX10VAA59B7BT
--- Costo: 1.065 cr; filas: 300; engine medium
+-- Última ejecución: 01M5JYH2ZNEPYBXHWNX7FHV7QP
+-- Costo: 1.017 cr; filas: 300; engine medium
 -- Top 100 LP addresses by USD added, all AMMs, all time and last 90 / 30 complete days.
 WITH windows AS (
   SELECT * FROM (VALUES ('all_time', DATE '2024-02-01'),

@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796528
 -- Matview: dune.paltalabs.result_scf_users   cron: 0 8 * * *
--- Última ejecución: 01M4DZ18FBX8MKJ4YQBVDMG9KS
--- Costo: 1.285 cr; filas: 879478; engine medium
+-- Última ejecución: 01M5JYFM3MVDJGPS0AB15M9QJQ
+-- Costo: 1.25 cr; filas: 901120; engine medium
 -- Daily user grain derived from the normalized activity layers. Soroswap is split into
 -- soroswap_amm and soroswap_aggregator by role.
 WITH act AS (

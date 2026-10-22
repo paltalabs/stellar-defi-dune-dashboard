@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8810360
 -- Matview: dune.paltalabs.result_scf_lp_price_coverage   cron: 0 9 * * *
--- Última ejecución: 01M358SWRK1W81AC4MKN08KJKH
--- Costo: 1.08 cr; filas: 10; engine medium
+-- Última ejecución: 01M5JYH9HXP43B4DZ439WJY4T8
+-- Costo: 1.102 cr; filas: 10; engine medium
 -- Share of LP USD and actions that could be valued, per protocol, last 90 complete days and all time.
 SELECT CASE WHEN day >= CURRENT_DATE - INTERVAL '90' DAY THEN 'last_90d' ELSE 'older' END AS window_name, protocol,
        COUNT(*) AS lp_actions, COUNT_IF(valuation = 'priced') AS priced, COUNT_IF(valuation = 'partial') AS partial,
