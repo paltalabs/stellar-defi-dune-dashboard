@@ -1,41 +1,41 @@
 -- Query: https://dune.com/queries/8796528
 -- Matview: dune.paltalabs.result_scf_users   cron: 0 8 * * *
--- Última ejecución: 01M5JYFM3MVDJGPS0AB15M9QJQ
--- Costo: 1.25 cr; filas: 901120; engine medium
+-- Última ejecución: 01M5JZC1VC7K0A6E3F4V7Q30JA
+-- Costo: 1.13 cr; filas: 849031; engine medium
 -- Daily user grain derived from the normalized activity layers. Soroswap is split into
--- soroswap_amm and soroswap_aggregator by role.
+-- soroswap_amm and soroswap_aggregator by role; Etherfuse SDEX trades do not count as use.
 WITH act AS (
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_blend_activity_archive WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_blend_activity_archive WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_blend_activity WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_blend_activity WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_aquarius_activity_archive WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_aquarius_activity_archive WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_aquarius_activity WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_aquarius_activity WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_soroswap_activity_archive WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_soroswap_activity_archive WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_soroswap_activity WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_soroswap_activity WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_phoenix_activity_archive WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_phoenix_activity_archive WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_phoenix_activity WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_phoenix_activity WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_fxdao_activity_archive WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_fxdao_activity_archive WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_fxdao_activity WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_fxdao_activity WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_etherfuse_activity_archive WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_etherfuse_activity_archive WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_etherfuse_activity WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_etherfuse_activity WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_sushiswap_activity_archive WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_sushiswap_activity_archive WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_sushiswap_activity WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_sushiswap_activity WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_defindex_activity_archive WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_defindex_activity_archive WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
-SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_defindex_activity WHERE row_kind = 'activity'
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_defindex_activity WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 ), meta AS (
 SELECT protocol, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_blend_activity_archive WHERE row_kind = 'metadata'
 UNION ALL
