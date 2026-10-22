@@ -178,7 +178,7 @@ acción con el último precio de hasta 7 días antes:
 |---|---|
 | `deposit`, `pool_deposit`, `provide_liquidity`, `add_liquidity`, `locking_deposit` | add |
 | `withdraw`, `pool_withdraw`, `withdraw_liquidity`, `remove_liquidity`, `locking_withdraw`, `collect` | remove |
-| `position_update` (Aquarius, sin tokens; ya no se lee desde 2026-10-22, quedan filas viejas en el archive hasta repararlo) | other |
+| `position_update` (Aquarius; ya no se lee desde 2026-10-22) | other |
 
 Reglas de valorización (`usd_method`):
 
@@ -187,9 +187,9 @@ Reglas de valorización (`usd_method`):
 - `capped_2x_min`: en pools de producto constante o stable, los dos lados valen parecido. Si
   difieren más de 10×, el precio de un token ilíquido está mal y cuenta 2 × el menor.
 - `one_leg_2x`: si un solo lado tiene precio, cuenta 2 × ese lado.
-- `legacy_2x_a`: los `pool_deposit` de Aquarius anteriores a 2026-09-01 se leyeron como `[a, b,
-  shares]` cuando el evento es `[shares, a, b]`. En esas filas `amount_a` son shares y `amount_b`
-  es el monto de A; se valorizan como 2 × A. Desde 2026-09-01 la capa guarda los montos correctos.
+- `legacy_2x_a`: ya no se usa. Los `pool_deposit` de Aquarius anteriores a 2026-09-01 se habían
+  leído como `[a, b, shares]` cuando el evento es `[shares, a, b]` y se valorizaban como 2 × A. El
+  archive se reconstruyó el 2026-10-22 con el formato correcto y todas las filas usan sus dos lados.
   El tercer token de los pools de 3 tokens no se guarda.
 
 FxDAO no trae montos por token en sus operaciones: sus acciones cuentan como LP activo, sin USD.
