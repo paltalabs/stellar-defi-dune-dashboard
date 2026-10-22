@@ -8,6 +8,7 @@ desde result_scf_contracts (el registro que se descubre solo); el check unregist
 de users_validation avisa cuando el registro tiene contratos que el SQL todavía no incluye.
 """
 import csv
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -56,11 +57,29 @@ SOROSWAP_AGGREGATORS = ['CCHCH6XVKTMKTYCTKKTKNE2TFP5CMORNY77TA6XSRAD2XM7I2SJBUH3
 SOROSWAP_AGGREGATORS_V3 = ['CARVQXFP4JF5ELLXUMQ6DALR346YVGBMQOHB4ENA7SSVXAYABXLBDDC4',
                            'CAVNAZFNJU63OFO7XRFQF3FBEVNBQ2SQNJY2A2AJFBGCUNCQK6J5HLER']
 # Stellar multicall routers the aggregator API used to bundle a Soroban swap with its fee
-# transfers (2025-06 to 2026-09-22), and the account that receives Soroswap's fee: a transfer to
-# it inside the call marks the tx as built by the API, and whoever pays it is the user.
+# transfers (2025-06 to 2026-09-22). A transfer to Soroswap's fee account inside the call marks the
+# tx as built by the API, and whoever pays it is the user. The channel ended on 2026-09-22 and its
+# rows are already in the archive; the fee account is not published, so without the
+# SOROSWAP_FEE_RECEIVER environment variable the multicall rail is empty. Set it only to rebuild
+# those months.
 SOROSWAP_MULTICALL_ROUTERS = ['CBZV3HBP672BV7FF3ZILVT4CNPW3N5V2WTJ2LAGOAYW5R7L2D5SLUDFZ',
                               'CDAW42JDSDEI2DXEPP4E7OAYNCRUA4LGCZHXCJ4BV5WVI4O4P77FO4UV']
-SOROSWAP_FEE_RECEIVER = 'GBWUWAQ26NG72VHQAM73A2FF7KRJ4HXUDHW556D2UEUGAVPMWDRBJINQ'
+SOROSWAP_FEE_RECEIVER = os.environ.get('SOROSWAP_FEE_RECEIVER')
+
+
+def multicall_ops(win):
+    """mc_ops CTE body: multicall invocations that paid Soroswap's fee, or no rows when the fee
+    account is not set."""
+    if not SOROSWAP_FEE_RECEIVER:
+        return ("SELECT CAST(NULL AS BIGINT) AS transaction_id, CAST(NULL AS TIMESTAMP) AS closed_at, "
+                "CAST(NULL AS VARCHAR) AS contract_id, CAST(NULL AS VARCHAR) AS payer WHERE FALSE")
+    return f"""SELECT o.transaction_id, o.closed_at, o.contract_id, MAX(c."from") AS payer
+  FROM stellar.history_operations o
+  CROSS JOIN UNNEST(o.asset_balance_changes) AS c(amount, asset_code, asset_issuer, asset_type, "from", "to", type)
+  WHERE {win('o.closed_at_date')} AND o.type_string = 'invoke_host_function'
+    AND o.contract_id IN ({lit(SOROSWAP_MULTICALL_ROUTERS)})
+    AND c.type = 'transfer' AND c."to" = '{SOROSWAP_FEE_RECEIVER}'
+  GROUP BY 1, 2, 3"""
 PHOENIX_FACTORY = 'CB4SVAWJA6TSRNOJZ7W2AWFW46D5VR4ZMFZKDIKXEINZCZEGZCJZCKMI'
 AQUARIUS_ROUTERS = ['CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK',
                     'CA7RQDMMV6E53P5EDZA5GPWBZ33AMW2ZNO42XLI2RGRIAP4QXIARUOJQ',
@@ -395,13 +414,7 @@ pivoted AS (
 ),
 routed_txs AS (SELECT DISTINCT tx_hash FROM pivoted WHERE kind IN ('router', 'aggregator', 'aggregator_v3')),
 mc_ops AS (
-  SELECT o.transaction_id, o.closed_at, o.contract_id, MAX(c."from") AS payer
-  FROM stellar.history_operations o
-  CROSS JOIN UNNEST(o.asset_balance_changes) AS c(amount, asset_code, asset_issuer, asset_type, "from", "to", type)
-  WHERE {win('o.closed_at_date')} AND o.type_string = 'invoke_host_function'
-    AND o.contract_id IN ({lit(SOROSWAP_MULTICALL_ROUTERS)})
-    AND c.type = 'transfer' AND c."to" = '{SOROSWAP_FEE_RECEIVER}'
-  GROUP BY 1, 2, 3
+  {multicall_ops(win)}
 ),
 agg_txs AS (
   SELECT id AS transaction_id, lower(to_hex(transaction_hash)) AS tx_hash, account, memo
@@ -799,7 +812,10 @@ def soroswap_backfill(until='2026-10-01'):
     (v3 since 2026-09-11, multicall since 2025-06) without rescanning the whole history (a full
     rebuild measured 150 cr on 2026-09-22). Reads the archive itself, drops the AMM rows of the
     multicall txs (they are the aggregator routing), and appends the new rows. Run once as the
-    archive SQL, then set archive_incremental('soroswap') back."""
+    archive SQL, then set archive_incremental('soroswap') back. Needs SOROSWAP_FEE_RECEIVER for the
+    multicall rail."""
+    if not SOROSWAP_FEE_RECEIVER:
+        raise RuntimeError('soroswap_backfill needs SOROSWAP_FEE_RECEIVER in the environment')
     own = archive_table('soroswap')
     v3 = lit(SOROSWAP_AGGREGATORS_V3)
     w = lambda col, start: f"{col} >= DATE '{start}' AND {col} < DATE '{until}'"
@@ -825,13 +841,7 @@ v3 AS (
   GROUP BY 1, 2, 3, 4, 5, 6, xxhash64(to_utf8(e.data_decoded))
 ),
 mc_ops AS (
-  SELECT o.transaction_id, o.closed_at, o.contract_id, MAX(c."from") AS payer
-  FROM stellar.history_operations o
-  CROSS JOIN UNNEST(o.asset_balance_changes) AS c(amount, asset_code, asset_issuer, asset_type, "from", "to", type)
-  WHERE {w('o.closed_at_date', '2025-06-01')} AND o.type_string = 'invoke_host_function'
-    AND o.contract_id IN ({lit(SOROSWAP_MULTICALL_ROUTERS)})
-    AND c.type = 'transfer' AND c."to" = '{SOROSWAP_FEE_RECEIVER}'
-  GROUP BY 1, 2, 3
+  {multicall_ops(lambda col: w(col, '2025-06-01'))}
 ),
 multicall AS (
   SELECT m.closed_at, lower(to_hex(t.transaction_hash)) AS tx_hash, m.contract_id, m.payer
