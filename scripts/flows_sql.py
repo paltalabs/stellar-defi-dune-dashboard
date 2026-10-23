@@ -36,6 +36,7 @@ SINGLE_TOKEN_FLOWS = [
     ('repay_collateral_repay', 'credit', 'in'), ('repay_collateral_net', 'credit', 'in'),
 ]
 SINGLE_TOKEN_PROTOCOLS = ('blend', 'xoxno_lending', 'defindex')
+MIGRATION_DAYS = 7           # decided 2026-10-23: 76% of the 30-day cases and 80% of their USD
 
 
 def single_token_layers():
@@ -92,4 +93,73 @@ WHERE direction IN ('add', 'remove')
 """
 
 
-METRICS = {'flow_tx': flow_tx}
+def flows_periods():
+    """In, out and net USD per calendar week and month (UTC) at three levels: each pool, each
+    protocol (pool 'all') and the ecosystem (protocol 'all protocols'). G and C addresses are
+    separate rows; the ecosystem keeps only G, since contracts (DeFindex strategies above all)
+    move into another protocol what already entered one and would count it twice."""
+    return f"""-- Liquidity flows per week and month: in, out and net USD per pool, protocol and ecosystem.
+WITH tx AS (SELECT * FROM {FLOW_TX} WHERE day < CURRENT_DATE),
+grains AS (
+  SELECT 'week' AS grain, CAST(date_trunc('week', day) AS DATE) AS period_start, * FROM tx
+  UNION ALL
+  SELECT 'month', CAST(date_trunc('month', day) AS DATE), * FROM tx
+), levels AS (
+  SELECT grain, period_start, protocol, pool, flow_type, address_type, direction, user_address, usd_value, valuation FROM grains
+  UNION ALL
+  SELECT grain, period_start, protocol, 'all', flow_type, address_type, direction, user_address, usd_value, valuation FROM grains
+  UNION ALL
+  SELECT grain, period_start, 'all protocols', 'all', flow_type, address_type, direction, user_address, usd_value, valuation
+  FROM grains WHERE address_type = 'G'
+)
+SELECT grain, period_start, protocol, pool, flow_type, address_type,
+       COUNT(DISTINCT user_address) AS addresses,
+       COUNT(DISTINCT CASE WHEN direction = 'in' THEN user_address END) AS addresses_in,
+       COUNT(DISTINCT CASE WHEN direction = 'out' THEN user_address END) AS addresses_out,
+       COUNT_IF(direction = 'in') AS actions_in, COUNT_IF(direction = 'out') AS actions_out,
+       SUM(usd_value) FILTER (WHERE direction = 'in') AS usd_in,
+       SUM(usd_value) FILTER (WHERE direction = 'out') AS usd_out,
+       COALESCE(SUM(usd_value) FILTER (WHERE direction = 'in'), 0) - COALESCE(SUM(usd_value) FILTER (WHERE direction = 'out'), 0) AS usd_net,
+       CAST(COUNT_IF(valuation = 'priced') AS DOUBLE) / NULLIF(COUNT_IF(valuation NOT IN ('excluded', 'no_tokens')), 0) AS priced_action_share,
+       date_add(grain, 1, period_start) <= CURRENT_DATE AS is_complete
+FROM levels GROUP BY 1, 2, 3, 4, 5, 6
+"""
+
+
+def migrations():
+    """For every liquidity withdrawal of a G address in protocol A, the first liquidity deposit of
+    the same address in another protocol B within MIGRATION_DAYS after it. Only G addresses: a
+    contract that moves funds between protocols is a strategy or a router, not a user choosing a
+    protocol (3 contract migrations in 30 days against 1.179 of wallets, 2026-10-22). The amount
+    that could have migrated is the smaller of the two sides. Withdrawals newer than the window
+    are left out until it closes."""
+    return f"""-- Liquidity migrations: a wallet withdraws from one protocol and deposits in another within {MIGRATION_DAYS} days.
+WITH f AS (
+  SELECT protocol, pool, closed_at, tx_hash, user_address, direction, usd_value
+  FROM {FLOW_TX}
+  WHERE flow_type = 'liquidity' AND address_type = 'G'
+), outs AS (
+  SELECT * FROM f WHERE direction = 'out' AND closed_at < CURRENT_TIMESTAMP - INTERVAL '{MIGRATION_DAYS}' DAY
+), ins AS (SELECT * FROM f WHERE direction = 'in'),
+matched AS (
+  SELECT o.protocol AS from_protocol, o.pool AS from_pool, o.closed_at AS out_at, o.tx_hash AS out_tx,
+         o.user_address, o.usd_value AS usd_out,
+         min_by(CAST(ROW(i.protocol, i.pool, i.closed_at, i.tx_hash, i.usd_value)
+                AS ROW(protocol varchar, pool varchar, closed_at timestamp(3) with time zone, tx_hash varchar, usd_value double)),
+                ROW(i.closed_at, i.tx_hash)) AS first_in
+  FROM outs o
+  JOIN ins i ON i.user_address = o.user_address AND i.protocol <> o.protocol
+   AND i.closed_at >= o.closed_at AND i.closed_at <= o.closed_at + INTERVAL '{MIGRATION_DAYS}' DAY
+  GROUP BY 1, 2, 3, 4, 5, 6
+)
+SELECT from_protocol, from_pool, first_in.protocol AS to_protocol, first_in.pool AS to_pool, user_address,
+       out_at, first_in.closed_at AS in_at, CAST(out_at AT TIME ZONE 'UTC' AS DATE) AS out_day,
+       out_tx, first_in.tx_hash AS in_tx, out_tx = first_in.tx_hash AS same_tx,
+       date_diff('second', out_at, first_in.closed_at) AS seconds_between,
+       usd_out, first_in.usd_value AS usd_in, LEAST(usd_out, first_in.usd_value) AS usd_migrated,
+       CURRENT_TIMESTAMP AS refreshed_at
+FROM matched
+"""
+
+
+METRICS = {'flow_tx': flow_tx, 'flows_periods': flows_periods, 'migrations': migrations}
