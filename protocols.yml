@@ -164,3 +164,26 @@ protocols:
     vaults: discovered by the vault events table (96 with deposits or withdrawals at 2026-10-08)
     not_counted: share transfers between addresses (not a protocol action)
 
+
+  xoxno_lending:
+    kind: lending
+    docs: https://github.com/XOXNO/rs-lending-xlm/blob/main/docs/reference/events.md
+    added: 2026-10-23
+    user_source: events            # controller position batches: owner per leg; liquidation: liquidator; flash_loan: caller
+    contracts:                     # rs-lending-xlm configs/networks.json
+      controller: CAUCMIN5KSXEVZ7NMXR3LZATGD5EFIEUI5XWTFLYRO2R5OTXI22WE5JX   # created 2026-08-26
+      pool: CBXRNDQMAJFG4VUKMKFEMFS75UUXE2SPSNV4LEEFCSNBCN66PYRWBKXO
+      position_nft: CAWCSG77AY2W24QZ6ZXLHZU4UXEFHZBM6EI4A4IF7JB5CTY4XND3TI6C
+    roles:
+      lender: [supply, withdraw, swap_collateral, repay_with_collateral, close]
+      borrower: [borrow, repay, multiply, swap_debt, repay_with_collateral, migrate_from_blend, flash_position, flash_loan]
+      liquidator: [liquidate]
+    not_counted: liquidated accounts (LiqRepay, LiqSeize, LiqCredit legs) and ParamUpd legs
+
+  xoxno_swap:
+    kind: aggregator
+    added: 2026-10-23
+    user_source: operations        # no swap event: sender of execute_strategy calls to the router, direct or nested
+    contracts:
+      router: CCVENFSVCBYDHVOACFZXMNNYVOZ3LKXPZYU5LUI4N7KTXOKRVYD7F3TR       # created 2026-07-18
+    not_counted: swaps made by XOXNO Lending strategies (already lending actions)
