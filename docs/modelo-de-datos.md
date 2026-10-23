@@ -197,8 +197,8 @@ Reglas de valorización (`usd_method`):
 FxDAO no trae montos por token en sus operaciones: sus acciones cuentan como LP activo, sin USD.
 
 Backstop de Blend: `deposit` trae `[tokens_in, shares]` y `withdraw` trae `[shares, tokens_out]`.
-Hasta 2026-10-23 la capa leía el primer valor en los dos, así que los `backstop_withdraw` del
-archive anteriores a 2026-10-01 guardan shares en `amount_a`; desde entonces guardan el LP de
-Comet que sale. El LP de Comet (`CAS3FL6TLZ…`) no tiene precio: el backstop no suma USD. El
+Hasta 2026-10-23 la capa leía el primer valor en los dos y guardaba shares en los
+`backstop_withdraw`; ese día se corrigió y se reconstruyó el archive, así que toda la historia
+guarda el LP de Comet que sale. El LP de Comet (`CAS3FL6TLZ…`) no tiene precio: el backstop no suma USD. El
 2026-08-25 el pool Comet BLND-USDC fue atacado y el backstop dejó de recibir depósitos desde el
 2026-09-10; los montos de esas semanas no son comparables con los de antes.
