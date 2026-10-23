@@ -172,14 +172,15 @@ protocols:
     user_source: events            # controller position batches: owner per leg; liquidation: liquidator; flash_loan: caller
     contracts:                     # rs-lending-xlm configs/networks.json
       controller: CAUCMIN5KSXEVZ7NMXR3LZATGD5EFIEUI5XWTFLYRO2R5OTXI22WE5JX   # created 2026-08-26
-    # The pool and the position NFT are not read: only the controller calls them. The batch owner
-    # is the NFT's owner at the time of the action, so a direct NFT transfer moves later activity
-    # to the new holder without reading NFT events.
+      position_nft: CAWCSG77AY2W24QZ6ZXLHZU4UXEFHZBM6EI4A4IF7JB5CTY4XND3TI6C  # transfer events only
+    # The pool is not read: only the controller calls it. The controller only mints and burns the
+    # position NFT, so a transfer event is always the holder's own call; it counts for the receiver.
     roles:
       lender: [supply, withdraw, swap_collateral_withdraw, repay_collateral_withdraw, close_withdraw]
       borrower: [borrow, repay, multiply, swap_debt, repay_collateral_repay, repay_collateral_net, migrate_from_blend, flash_position, flash_loan]
       liquidator: [liquidate]
-    not_counted: liquidated accounts (LiqRepay, LiqSeize, LiqCredit legs) and ParamUpd legs
+      position_holder: [position_transfer]
+    not_counted: NFT mint and burn (made by the controller), liquidated accounts (LiqRepay, LiqSeize, LiqCredit legs) and ParamUpd legs
 
   xoxno_swap:
     kind: aggregator

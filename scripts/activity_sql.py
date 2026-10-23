@@ -96,6 +96,7 @@ COMET_BLND_USDC = 'CAS3FL6TLZKDGGSISDBWGGPXT3NRR4DYTZD7YOD3HMYO6LTJUVGRVEAM'
 SUSHI_FACTORY = 'CD3KRKGDRVWPXVB3VXLUMQKMX6XZ6Q2H334IVZD4XXNAMKSRVQL5GLYF'
 XOXNO_CONTROLLER = 'CAUCMIN5KSXEVZ7NMXR3LZATGD5EFIEUI5XWTFLYRO2R5OTXI22WE5JX'   # rs-lending-xlm configs/networks.json
 XOXNO_ROUTER = 'CCVENFSVCBYDHVOACFZXMNNYVOZ3LKXPZYU5LUI4N7KTXOKRVYD7F3TR'
+XOXNO_POSITION_NFT = 'CAWCSG77AY2W24QZ6ZXLHZU4UXEFHZBM6EI4A4IF7JB5CTY4XND3TI6C'
 # Contracts that route trades for end users. A trade whose user is one of these is counted for
 # the contract, not for the person behind it (docs/modelo-de-datos.md, integridad).
 AGGREGATORS = SOROSWAP_AGGREGATORS + SOROSWAP_AGGREGATORS_V3 + [SOROSWAP_ROUTER] + AQUARIUS_ROUTERS + [XOXNO_ROUTER]
@@ -747,7 +748,10 @@ def xoxno_lending(win):
     gives action and role. Liquidation legs (LiqRepay 4, LiqSeize 5, LiqCredit 15) and ParamUpd 7
     are left out: the owner did not act; the liquidator comes from the liquidation event. Shapes
     checked on 20 events from RPC (2026-10-23): amounts positive in every action, raw token units,
-    stored as raw * 1e-7 like every layer (prices_sql corrects the token's decimals)."""
+    stored as raw * 1e-7 like every layer (prices_sql corrects the token's decimals).
+    A direct transfer of the position NFT, topics [transfer, from, to], counts for the receiver:
+    the controller only mints and burns (separate events), so every transfer is the holder's own
+    call. The pool is not read: only the controller calls it."""
     i128 = lambda path, col: f"""COALESCE(
       TRY(CAST(json_extract_scalar({col}, '{path}.i128') AS DECIMAL(38,0))),
       TRY(CAST(json_extract_scalar({col}, '{path}.i128.hi') AS DECIMAL(38,0)) * DECIMAL '18446744073709551616'
@@ -759,13 +763,16 @@ def xoxno_lending(win):
     {actions}) AS v(code, action, role)),
 ev AS (
   SELECT DISTINCT he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash,
-    json_extract_scalar(he.topics_decoded, '$[1].symbol') AS kind, he.data_decoded
+    CASE WHEN he.contract_id = '{XOXNO_POSITION_NFT}' THEN 'nft_transfer'
+         ELSE json_extract_scalar(he.topics_decoded, '$[1].symbol') END AS kind,
+    he.topics_decoded, he.data_decoded
   FROM stellar.history_contract_events he
   WHERE {win('he.closed_at_date')}
-    AND he.contract_id = '{XOXNO_CONTROLLER}'
+    AND he.contract_id IN ('{XOXNO_CONTROLLER}', '{XOXNO_POSITION_NFT}')
     {EVENT_FILTERS}
-    AND json_extract_scalar(he.topics_decoded, '$[0].symbol') = 'position'
-    AND json_extract_scalar(he.topics_decoded, '$[1].symbol') IN ('batch_update', 'liquidation', 'flash_loan')
+    AND ((he.contract_id = '{XOXNO_CONTROLLER}' AND json_extract_scalar(he.topics_decoded, '$[0].symbol') = 'position'
+          AND json_extract_scalar(he.topics_decoded, '$[1].symbol') IN ('batch_update', 'liquidation', 'flash_loan'))
+      OR (he.contract_id = '{XOXNO_POSITION_NFT}' AND json_extract_scalar(he.topics_decoded, '$[0].symbol') = 'transfer'))
 ),
 legs AS (
   SELECT e.contract_id, e.closed_at, e.tx_hash,
@@ -788,6 +795,10 @@ acts AS (
   SELECT contract_id, closed_at, tx_hash, {field('caller', 'address', address)}, 'flash_loan', 'borrower',
     {field('asset', 'address', address)}, TRY(CAST({field('amount', 'i128', '-?[0-9]+')} AS DECIMAL(38,0)))
   FROM ev WHERE kind = 'flash_loan'
+  UNION ALL
+  SELECT contract_id, closed_at, tx_hash, json_extract_scalar(topics_decoded, '$[2].address'), 'position_transfer', 'position_holder',
+    NULL, NULL
+  FROM ev WHERE kind = 'nft_transfer'
 )
 SELECT 'xoxno_lending' AS protocol, contract_id, closed_at, tx_hash, user_address, action, role,
   CAST(NULL AS VARCHAR) AS pool, asset AS token_a, CAST(raw * DECIMAL '0.0000001' AS DECIMAL(38,7)) AS amount_a,
