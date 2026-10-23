@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796531
 -- Matview: dune.paltalabs.result_scf_users_health   cron: 0 9 * * *
--- Última ejecución: 01M34ZYVKJQ6JDX0KZJW20QK2B
--- Costo: 1.055 cr; filas: 7; engine medium
+-- Última ejecución: 01M5K7A5DWF4WGT96Y5R45M34A
+-- Costo: 1.118 cr; filas: 11; engine medium
 WITH metadata AS (
   SELECT protocol, MIN(covered_from) AS history_from, MAX(covered_until) AS covered_until,
          MAX(refreshed_at) FILTER (WHERE source_layer = 'live') AS live_refreshed_at,

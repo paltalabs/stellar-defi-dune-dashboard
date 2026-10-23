@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8810205
 -- Matview: dune.paltalabs.result_scf_first_protocol   cron: 0 9 * * *
--- Última ejecución: 01M357HWPNVMHKJEGMWZR89YHC
--- Costo: 7.979 cr; filas: 177; engine medium
+-- Última ejecución: 01M5K7DK5E08XBMHWDE458H72E
+-- Costo: 1.047 cr; filas: 222; engine medium
 -- Entry protocol of each address into the covered ecosystem (first day seen since 2024-02-01).
 -- Seen in two protocols on its first day -> 'multiple'. Not account creation.
 WITH firsts AS (SELECT user_address, protocol, MIN(activity_date) AS first_seen

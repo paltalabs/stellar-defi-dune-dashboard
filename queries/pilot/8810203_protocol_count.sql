@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8810203
 -- Matview: dune.paltalabs.result_scf_protocol_count   cron: 0 9 * * *
--- Última ejecución: 01M357HGSSBW591P6EMD73DP75
--- Costo: 1.237 cr; filas: 119; engine medium
+-- Última ejecución: 01M5K7DCM6ZXD7SMSTCQKW2PBA
+-- Costo: 1.063 cr; filas: 123; engine medium
 -- How many protocols each address used: all time, last 28 complete days, complete calendar months.
 WITH u AS (SELECT protocol, activity_date, user_address FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity' AND activity_date < CURRENT_DATE),
 per_period AS (
