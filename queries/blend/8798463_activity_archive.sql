@@ -26,7 +26,8 @@ parsed AS (
       TRY(CAST(COALESCE(json_extract_scalar(data_decoded, '$.vec[0].i128'), json_extract_scalar(data_decoded, '$.i128')) AS DECIMAL(38,0))),
       TRY(CAST(json_extract_scalar(data_decoded, '$.vec[0].i128.hi') AS DECIMAL(38,0)) * DECIMAL '18446744073709551616'
           + CAST(json_extract_scalar(data_decoded, '$.vec[0].i128.lo') AS DECIMAL(38,0)))
-    ) AS d0_i128
+    ) AS d0_i128,
+    TRY(CAST(json_extract_scalar(data_decoded, '$.vec[1].i128') AS DECIMAL(38,0))) AS d1_i128
   FROM ev
 )
 SELECT 'blend' AS protocol, contract_id, closed_at, tx_hash,
@@ -51,7 +52,8 @@ SELECT 'blend' AS protocol, contract_id, closed_at, tx_hash,
   CASE
     WHEN (kind = 'pool' AND action IN ('supply', 'withdraw', 'supply_collateral', 'withdraw_collateral', 'borrow', 'repay', 'flash_loan'))
       OR (kind = 'backstop' AND action IN ('deposit', 'withdraw', 'donate'))
-    THEN CAST(d0_i128 * DECIMAL '0.0000001' AS DECIMAL(38,7))
+    -- Backstop withdraw data is [shares, tokens_out]; deposit and donate lead with the LP tokens.
+    THEN CAST(CASE WHEN kind = 'backstop' AND action = 'withdraw' THEN d1_i128 ELSE d0_i128 END * DECIMAL '0.0000001' AS DECIMAL(38,7))
   END AS amount_a,
   CAST(NULL AS VARCHAR) AS token_b, CAST(NULL AS DECIMAL(38,7)) AS amount_b
 FROM parsed
