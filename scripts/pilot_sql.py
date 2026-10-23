@@ -475,6 +475,8 @@ TRACKED = [
     ('fxdao', 'FxDAO', 'CDP stablecoins', 'Vault operations, redemptions, liquidations and locking pool'),
     ('etherfuse', 'Etherfuse', 'Tokenized bonds (classic assets)', 'Mints, redeems and transfers of its stablebonds; SDEX trading of the bonds is not counted'),
     ('defindex', 'DeFindex', 'Yield vaults', 'Deposits and withdrawals in DeFindex vaults (since May 2025)'),
+    ('xoxno_lending', 'XOXNO Lending', 'Lending', 'Supply, withdraw, borrow, repay, multiply and collateral/debt swaps, flash loans, liquidations, position NFT transfers (since August 2026)'),
+    ('xoxno_swap', 'XOXNO Swap', 'Aggregator', 'Swaps through the XOXNO router, called directly or from batch contracts; swaps inside XOXNO Lending strategies are not counted (since July 2026)'),
 ]
 
 

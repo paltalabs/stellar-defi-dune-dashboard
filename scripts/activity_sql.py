@@ -12,7 +12,8 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PROTOCOLS = ('blend', 'aquarius', 'soroswap', 'phoenix', 'fxdao', 'etherfuse', 'sushiswap', 'defindex')
+PROTOCOLS = ('blend', 'aquarius', 'soroswap', 'phoenix', 'fxdao', 'etherfuse', 'sushiswap', 'defindex',
+             'xoxno_lending', 'xoxno_swap')
 HISTORY_START = '2024-02-01'
 # Weekly charts zoom into the last 13 complete weeks (about three months); monthly charts keep
 # the whole history.
@@ -29,7 +30,11 @@ def chart_since(grain):
 SUSHI_START = '2026-03-01'
 # DeFindex vaults went live in May 2025.
 DEFINDEX_START = '2025-05-01'
-HISTORY_STARTS = {'sushiswap': SUSHI_START, 'defindex': DEFINDEX_START}
+# XOXNO's swap router was created on 2026-07-18 and its lending controller on 2026-08-26.
+XOXNO_SWAP_START = '2026-07-01'
+XOXNO_LENDING_START = '2026-08-01'
+HISTORY_STARTS = {'sushiswap': SUSHI_START, 'defindex': DEFINDEX_START,
+                  'xoxno_lending': XOXNO_LENDING_START, 'xoxno_swap': XOXNO_SWAP_START}
 # Deposits and withdrawals of every DeFindex vault, already decoded and kept up to date by the
 # DeFindex dashboard pipeline (query 5900680, public). Reading it costs a fraction of a credit.
 DEFINDEX_EVENTS = 'dune.paltalabs.result_de_findex_vaults_events'
@@ -89,9 +94,12 @@ FXDAO_LOCKING = 'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP'
 ETHERFUSE_ISSUER = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'
 COMET_BLND_USDC = 'CAS3FL6TLZKDGGSISDBWGGPXT3NRR4DYTZD7YOD3HMYO6LTJUVGRVEAM'
 SUSHI_FACTORY = 'CD3KRKGDRVWPXVB3VXLUMQKMX6XZ6Q2H334IVZD4XXNAMKSRVQL5GLYF'
+XOXNO_CONTROLLER = 'CAUCMIN5KSXEVZ7NMXR3LZATGD5EFIEUI5XWTFLYRO2R5OTXI22WE5JX'   # rs-lending-xlm configs/networks.json
+XOXNO_ROUTER = 'CCVENFSVCBYDHVOACFZXMNNYVOZ3LKXPZYU5LUI4N7KTXOKRVYD7F3TR'
+XOXNO_POSITION_NFT = 'CAWCSG77AY2W24QZ6ZXLHZU4UXEFHZBM6EI4A4IF7JB5CTY4XND3TI6C'
 # Contracts that route trades for end users. A trade whose user is one of these is counted for
 # the contract, not for the person behind it (docs/modelo-de-datos.md, integridad).
-AGGREGATORS = SOROSWAP_AGGREGATORS + SOROSWAP_AGGREGATORS_V3 + [SOROSWAP_ROUTER] + AQUARIUS_ROUTERS
+AGGREGATORS = SOROSWAP_AGGREGATORS + SOROSWAP_AGGREGATORS_V3 + [SOROSWAP_ROUTER] + AQUARIUS_ROUTERS + [XOXNO_ROUTER]
 
 EVENT_FILTERS = """AND he.type_string = 'ContractEventTypeContract'
     AND he.successful = TRUE AND he.in_successful_contract_call = TRUE"""
@@ -724,8 +732,116 @@ def defindex(win):
 FROM {DEFINDEX_EVENTS} e
 WHERE {win('CAST(e.closed_at AT TIME ZONE \'UTC\' AS DATE)')} AND e.event IN ('deposit', 'withdraw')"""
 
+XOXNO_LEG_ACTIONS = {   # PositionAction u32 of rs-lending-xlm (docs/reference/events.md) -> action, role
+    0: ('supply', 'lender'), 2: ('withdraw', 'lender'), 9: ('swap_collateral_withdraw', 'lender'),
+    10: ('repay_collateral_withdraw', 'lender'), 12: ('close_withdraw', 'lender'),
+    1: ('borrow', 'borrower'), 3: ('repay', 'borrower'), 6: ('multiply', 'borrower'),
+    8: ('swap_debt', 'borrower'), 11: ('repay_collateral_repay', 'borrower'),
+    13: ('migrate_from_blend', 'borrower'), 14: ('repay_collateral_net', 'borrower'),
+    16: ('flash_position', 'borrower'),
+}
+
+
+def xoxno_lending(win):
+    """XOXNO Lending, controller events only. A position batch [account_id, [owner, spoke, mode],
+    deposits, borrows] gives one row per leg, user = the account owner; the leg's PositionAction
+    gives action and role. Liquidation legs (LiqRepay 4, LiqSeize 5, LiqCredit 15) and ParamUpd 7
+    are left out: the owner did not act; the liquidator comes from the liquidation event. Shapes
+    checked on 20 events from RPC (2026-10-23): amounts positive in every action, raw token units,
+    stored as raw * 1e-7 like every layer (prices_sql corrects the token's decimals).
+    A direct transfer of the position NFT, topics [transfer, from, to], counts for the receiver:
+    the controller only mints and burns (separate events), so every transfer is the holder's own
+    call. The pool is not read: only the controller calls it."""
+    i128 = lambda path, col: f"""COALESCE(
+      TRY(CAST(json_extract_scalar({col}, '{path}.i128') AS DECIMAL(38,0))),
+      TRY(CAST(json_extract_scalar({col}, '{path}.i128.hi') AS DECIMAL(38,0)) * DECIMAL '18446744073709551616'
+          + CAST(json_extract_scalar({col}, '{path}.i128.lo') AS DECIMAL(38,0))))"""
+    field = lambda key, kind, value: f"""regexp_extract(data_decoded, '"{key}"\\}},"val":\\{{"{kind}":"?({value})', 1)"""
+    address = '[GC][A-Z2-7]{55}'
+    actions = ',\n    '.join(f"({c}, '{a}', '{r}')" for c, (a, r) in XOXNO_LEG_ACTIONS.items())
+    return f"""WITH codes AS (SELECT * FROM (VALUES
+    {actions}) AS v(code, action, role)),
+ev AS (
+  SELECT DISTINCT he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash,
+    CASE WHEN he.contract_id = '{XOXNO_POSITION_NFT}' THEN 'nft_transfer'
+         ELSE json_extract_scalar(he.topics_decoded, '$[1].symbol') END AS kind,
+    he.topics_decoded, he.data_decoded
+  FROM stellar.history_contract_events he
+  WHERE {win('he.closed_at_date')}
+    AND he.contract_id IN ('{XOXNO_CONTROLLER}', '{XOXNO_POSITION_NFT}')
+    {EVENT_FILTERS}
+    AND ((he.contract_id = '{XOXNO_CONTROLLER}' AND json_extract_scalar(he.topics_decoded, '$[0].symbol') = 'position'
+          AND json_extract_scalar(he.topics_decoded, '$[1].symbol') IN ('batch_update', 'liquidation', 'flash_loan'))
+      OR (he.contract_id = '{XOXNO_POSITION_NFT}' AND json_extract_scalar(he.topics_decoded, '$[0].symbol') = 'transfer'))
+),
+legs AS (
+  SELECT e.contract_id, e.closed_at, e.tx_hash,
+    json_extract_scalar(e.data_decoded, '$.vec[1].vec[0].address') AS user_address,
+    TRY(CAST(json_extract_scalar(t.leg, '$.vec[0].u32') AS INTEGER)) AS code,
+    json_extract_scalar(t.leg, '$.vec[2].address') AS asset,
+    {i128('$.vec[5]', 't.leg')} AS raw
+  FROM ev e
+  CROSS JOIN UNNEST(CAST(json_extract(e.data_decoded, '$.vec[2].vec') AS array(json))
+                 || CAST(json_extract(e.data_decoded, '$.vec[3].vec') AS array(json))) AS t(leg)
+  WHERE e.kind = 'batch_update'
+),
+acts AS (
+  SELECT l.contract_id, l.closed_at, l.tx_hash, l.user_address, c.action, c.role, l.asset, l.raw
+  FROM legs l JOIN codes c ON c.code = l.code
+  UNION ALL
+  SELECT contract_id, closed_at, tx_hash, {field('liquidator', 'address', address)}, 'liquidate', 'liquidator', NULL, NULL
+  FROM ev WHERE kind = 'liquidation'
+  UNION ALL
+  SELECT contract_id, closed_at, tx_hash, {field('caller', 'address', address)}, 'flash_loan', 'borrower',
+    {field('asset', 'address', address)}, TRY(CAST({field('amount', 'i128', '-?[0-9]+')} AS DECIMAL(38,0)))
+  FROM ev WHERE kind = 'flash_loan'
+  UNION ALL
+  SELECT contract_id, closed_at, tx_hash, json_extract_scalar(topics_decoded, '$[2].address'), 'position_transfer', 'position_holder',
+    NULL, NULL
+  FROM ev WHERE kind = 'nft_transfer'
+)
+SELECT 'xoxno_lending' AS protocol, contract_id, closed_at, tx_hash, user_address, action, role,
+  CAST(NULL AS VARCHAR) AS pool, asset AS token_a, CAST(raw * DECIMAL '0.0000001' AS DECIMAL(38,7)) AS amount_a,
+  CAST(NULL AS VARCHAR) AS token_b, CAST(NULL AS DECIMAL(38,7)) AS amount_b
+FROM acts"""
+
+
+def xoxno_swap(win):
+    """XOXNO swap router. It emits no swap event, so swaps are read from the invoke_host_function
+    operations whose parameters contain an execute_strategy(sender, total_in, route) call to the
+    router, either as the operation itself or nested in a batch contract (most calls in an RPC
+    sample of 2026-10-23 came through the Aquarius position manager CCM23MFA..., `exec`). User =
+    sender, one row per call. Calls made by the XOXNO Lending controller (multiply, swap_debt...)
+    are nested in the controller's own call and never appear in the parameters, so they are not
+    counted twice. Tokens and amounts live in the route XDR and are not read."""
+    call = (f'"address":"{XOXNO_ROUTER}"\\}},\\{{"symbol":"execute_strategy"\\}},'
+            f'(?:\\{{"vec":\\[)?\\{{"address":"([GC][A-Z2-7]{{55}})"')
+    return f"""WITH ops AS (
+  SELECT o.contract_id, o.closed_at, o.transaction_id,
+         regexp_extract_all(o.parameters_json_decoded, '{call}', 1) AS senders
+  FROM stellar.history_operations o
+  WHERE {win('o.closed_at_date')}
+    AND o.type_string = 'invoke_host_function'
+    AND strpos(o.parameters_json_decoded, '{XOXNO_ROUTER}') > 0
+),
+tx AS (
+  SELECT id, lower(to_hex(transaction_hash)) AS tx_hash
+  FROM stellar.history_transactions
+  WHERE {win('closed_at_date')} AND successful = TRUE
+)
+SELECT 'xoxno_swap' AS protocol, o.contract_id, o.closed_at, t.tx_hash, s.sender AS user_address,
+  CASE WHEN o.contract_id = '{XOXNO_ROUTER}' THEN 'aggregator_swap' ELSE 'aggregator_nested_swap' END AS action,
+  'aggregator_user' AS role, CAST(NULL AS VARCHAR) AS pool,
+  CAST(NULL AS VARCHAR) AS token_a, CAST(NULL AS DECIMAL(38,7)) AS amount_a,
+  CAST(NULL AS VARCHAR) AS token_b, CAST(NULL AS DECIMAL(38,7)) AS amount_b
+FROM ops o
+JOIN tx t ON t.id = o.transaction_id
+CROSS JOIN UNNEST(o.senders) AS s(sender)"""
+
+
 SOURCES = {'blend': blend, 'aquarius': aquarius, 'soroswap': soroswap, 'phoenix': phoenix,
-           'fxdao': fxdao, 'etherfuse': etherfuse, 'sushiswap': sushiswap, 'defindex': defindex}
+           'fxdao': fxdao, 'etherfuse': etherfuse, 'sushiswap': sushiswap, 'defindex': defindex,
+           'xoxno_lending': xoxno_lending, 'xoxno_swap': xoxno_swap}
 
 
 def history_start(protocol):
