@@ -30,10 +30,11 @@ def chart_since(grain):
 SUSHI_START = '2026-03-01'
 # DeFindex vaults went live in May 2025.
 DEFINDEX_START = '2025-05-01'
-# XOXNO: swap router created 2026-07-18, lending controller 2026-08-26 (stellar.expert).
-XOXNO_START = '2026-07-01'
+# XOXNO's swap router was created on 2026-07-18 and its lending controller on 2026-08-26.
+XOXNO_SWAP_START = '2026-07-01'
+XOXNO_LENDING_START = '2026-08-01'
 HISTORY_STARTS = {'sushiswap': SUSHI_START, 'defindex': DEFINDEX_START,
-                  'xoxno_lending': XOXNO_START, 'xoxno_swap': XOXNO_START}
+                  'xoxno_lending': XOXNO_LENDING_START, 'xoxno_swap': XOXNO_SWAP_START}
 # Deposits and withdrawals of every DeFindex vault, already decoded and kept up to date by the
 # DeFindex dashboard pipeline (query 5900680, public). Reading it costs a fraction of a credit.
 DEFINDEX_EVENTS = 'dune.paltalabs.result_de_findex_vaults_events'
@@ -93,27 +94,10 @@ FXDAO_LOCKING = 'CDCART6WRSM2K4CKOAOB5YKUVBSJ6KLOVS7ZEJHA4OAQ2FXX7JOHLXIP'
 ETHERFUSE_ISSUER = 'GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC'
 COMET_BLND_USDC = 'CAS3FL6TLZKDGGSISDBWGGPXT3NRR4DYTZD7YOD3HMYO6LTJUVGRVEAM'
 SUSHI_FACTORY = 'CD3KRKGDRVWPXVB3VXLUMQKMX6XZ6Q2H334IVZD4XXNAMKSRVQL5GLYF'
-# Contracts that route trades for end users. A trade whose user is one of these is counted for
-# the contract, not for the person behind it (docs/modelo-de-datos.md, integridad).
 XOXNO_CONTROLLER = 'CAUCMIN5KSXEVZ7NMXR3LZATGD5EFIEUI5XWTFLYRO2R5OTXI22WE5JX'   # rs-lending-xlm configs/networks.json
 XOXNO_ROUTER = 'CCVENFSVCBYDHVOACFZXMNNYVOZ3LKXPZYU5LUI4N7KTXOKRVYD7F3TR'
-# Markets whose token is not 7 decimals (rs-lending-xlm configs/mainnet/markets.json, 2026-10-23);
-# every other asset is read as 7.
-# ponytail: static list, read asset_decimals from the pool's batch_params_update events if markets churn
-XOXNO_DECIMALS = {
-    'CBZ4DCE7PYMUTOAKKUTRSUPT3FJFVOWCSKWUM5A72D6SAVMUJE5JN2PJ': 18,   # USST
-    'CBGV2QFQBBGEQRUKUMCPO3SZOHDDYO6SCP5CH6TW7EALKVHCXTMWDDOF': 5,    # SPIKOEUTBL
-    'CARUUX2FZNPH6DGJOEUFSIUQWYHNL5AVDV7PMVSHWL7OBYIBFC76F4TO': 5,    # SPIKOUSTBL
-    'CDT3KU6TQZNOHKNOHNAFFDQZDURVC3MSTL4ML7TUTZGNOPBZCLABP4FR': 5,    # SPIKOUKTBL
-    'CDGSC6BA4TCAOVSFQCUEHDMOIIHYYVNYBT6YEARS4MX3ITAHUINVGQHX': 5,    # SPIKOSAFO
-    'CBOOCGZSVRSZFRE4U2NWR2B4RXYVJWRCBTGOUD2JPI2TDJPWMTJX7FZP': 5,    # SPIKOEURSAFO
-    'CAGYRRKPFSWKM6SJOE4QAAVYMOSHMDS5WOQ4T5A2E6XNCU7LZZKUNQKP': 5,    # SPIKOGBPSAFO
-    'CBI7UCH5KGSVQRO5H4SUCZUTZABCITZLRHQQZTWL2TK4RZ72TAR6IHRV': 18,   # DEJTRSY
-    'CC64WBDGS6QQP22QTTIACYIXT3WF7BBQEYOQPLTP7GTKYY7PZ74QYGSL': 18,   # DEJAAA
-    'CC2RBGYNCFBCVENIDL5BFBWPH4OUZM2UA3OD2K2N54GLMWCC4KWPVAGO': 9,    # XAUM
-    'CBIJBDNZNF4X35BJ4FFZWCDBSCKOP5NB4PLG4SNENRMLAPYG4P5FM6VN': 8,    # SolvBTC
-    'CAUP7NFABXE5TJRL3FKTPMWRLC7IAXYDCTHQRFSCLR5TMGKHOOQO772J': 8,    # xSolvBTC
-}
+# Contracts that route trades for end users. A trade whose user is one of these is counted for
+# the contract, not for the person behind it (docs/modelo-de-datos.md, integridad).
 AGGREGATORS = SOROSWAP_AGGREGATORS + SOROSWAP_AGGREGATORS_V3 + [SOROSWAP_ROUTER] + AQUARIUS_ROUTERS + [XOXNO_ROUTER]
 
 EVENT_FILTERS = """AND he.type_string = 'ContractEventTypeContract'
@@ -748,11 +732,11 @@ FROM {DEFINDEX_EVENTS} e
 WHERE {win('CAST(e.closed_at AT TIME ZONE \'UTC\' AS DATE)')} AND e.event IN ('deposit', 'withdraw')"""
 
 XOXNO_LEG_ACTIONS = {   # PositionAction u32 of rs-lending-xlm (docs/reference/events.md) -> action, role
-    0: ('supply', 'lender'), 2: ('withdraw', 'lender'), 9: ('swap_collateral', 'lender'),
-    10: ('repay_with_collateral', 'lender'), 12: ('close', 'lender'),
+    0: ('supply', 'lender'), 2: ('withdraw', 'lender'), 9: ('swap_collateral_withdraw', 'lender'),
+    10: ('repay_collateral_withdraw', 'lender'), 12: ('close_withdraw', 'lender'),
     1: ('borrow', 'borrower'), 3: ('repay', 'borrower'), 6: ('multiply', 'borrower'),
-    8: ('swap_debt', 'borrower'), 11: ('repay_with_collateral', 'borrower'),
-    13: ('migrate_from_blend', 'borrower'), 14: ('repay_with_collateral', 'borrower'),
+    8: ('swap_debt', 'borrower'), 11: ('repay_collateral_repay', 'borrower'),
+    13: ('migrate_from_blend', 'borrower'), 14: ('repay_collateral_net', 'borrower'),
     16: ('flash_position', 'borrower'),
 }
 
@@ -762,18 +746,17 @@ def xoxno_lending(win):
     deposits, borrows] gives one row per leg, user = the account owner; the leg's PositionAction
     gives action and role. Liquidation legs (LiqRepay 4, LiqSeize 5, LiqCredit 15) and ParamUpd 7
     are left out: the owner did not act; the liquidator comes from the liquidation event. Shapes
-    checked on 20 events from RPC (2026-10-23): amounts positive in every action, raw token units."""
+    checked on 20 events from RPC (2026-10-23): amounts positive in every action, raw token units,
+    stored as raw * 1e-7 like every layer (prices_sql corrects the token's decimals)."""
     i128 = lambda path, col: f"""COALESCE(
       TRY(CAST(json_extract_scalar({col}, '{path}.i128') AS DECIMAL(38,0))),
       TRY(CAST(json_extract_scalar({col}, '{path}.i128.hi') AS DECIMAL(38,0)) * DECIMAL '18446744073709551616'
           + CAST(json_extract_scalar({col}, '{path}.i128.lo') AS DECIMAL(38,0))))"""
+    field = lambda key, kind, value: f"""regexp_extract(data_decoded, '"{key}"\\}},"val":\\{{"{kind}":"?({value})', 1)"""
+    address = '[GC][A-Z2-7]{55}'
     actions = ',\n    '.join(f"({c}, '{a}', '{r}')" for c, (a, r) in XOXNO_LEG_ACTIONS.items())
-    decimals = ',\n    '.join(f"('{a}', {d})" for a, d in XOXNO_DECIMALS.items())
-    map_val = lambda key, kind: (f"""regexp_extract(data_decoded, '"{key}"\\}},\\s*"val":\\s*\\{{"{kind}":\\s*"?([^"}}]+)', 1)""")
     return f"""WITH codes AS (SELECT * FROM (VALUES
     {actions}) AS v(code, action, role)),
-decimals AS (SELECT * FROM (VALUES
-    {decimals}) AS v(asset, decimals)),
 ev AS (
   SELECT DISTINCT he.contract_id, he.closed_at, lower(to_hex(he.transaction_hash)) AS tx_hash,
     json_extract_scalar(he.topics_decoded, '$[1].symbol') AS kind, he.data_decoded
@@ -795,29 +778,21 @@ legs AS (
                  || CAST(json_extract(e.data_decoded, '$.vec[3].vec') AS array(json))) AS t(leg)
   WHERE e.kind = 'batch_update'
 ),
-other AS (
-  SELECT contract_id, closed_at, tx_hash, kind,
-    CASE kind WHEN 'liquidation' THEN {map_val('liquidator', 'address')} ELSE {map_val('caller', 'address')} END AS user_address,
-    {map_val('asset', 'address')} AS asset,
-    TRY(CAST({map_val('amount', 'i128')} AS DECIMAL(38,0))) AS raw
-  FROM ev WHERE kind IN ('liquidation', 'flash_loan')
-),
 acts AS (
   SELECT l.contract_id, l.closed_at, l.tx_hash, l.user_address, c.action, c.role, l.asset, l.raw
   FROM legs l JOIN codes c ON c.code = l.code
   UNION ALL
-  SELECT contract_id, closed_at, tx_hash, user_address,
-    CASE kind WHEN 'liquidation' THEN 'liquidate' ELSE kind END,
-    CASE kind WHEN 'liquidation' THEN 'liquidator' ELSE 'borrower' END,
-    CASE kind WHEN 'flash_loan' THEN asset END, CASE kind WHEN 'flash_loan' THEN raw END
-  FROM other
+  SELECT contract_id, closed_at, tx_hash, {field('liquidator', 'address', address)}, 'liquidate', 'liquidator', NULL, NULL
+  FROM ev WHERE kind = 'liquidation'
+  UNION ALL
+  SELECT contract_id, closed_at, tx_hash, {field('caller', 'address', address)}, 'flash_loan', 'borrower',
+    {field('asset', 'address', address)}, TRY(CAST({field('amount', 'i128', '-?[0-9]+')} AS DECIMAL(38,0)))
+  FROM ev WHERE kind = 'flash_loan'
 )
-SELECT 'xoxno_lending' AS protocol, r.contract_id, r.closed_at, r.tx_hash, r.user_address, r.action, r.role,
-  CAST(NULL AS VARCHAR) AS pool, r.asset AS token_a,
-  CASE WHEN COALESCE(d.decimals, 7) = 7 THEN CAST(r.raw * DECIMAL '0.0000001' AS DECIMAL(38,7))
-       ELSE CAST(CAST(r.raw AS DOUBLE) / power(10, d.decimals) AS DECIMAL(38,7)) END AS amount_a,
+SELECT 'xoxno_lending' AS protocol, contract_id, closed_at, tx_hash, user_address, action, role,
+  CAST(NULL AS VARCHAR) AS pool, asset AS token_a, CAST(raw * DECIMAL '0.0000001' AS DECIMAL(38,7)) AS amount_a,
   CAST(NULL AS VARCHAR) AS token_b, CAST(NULL AS DECIMAL(38,7)) AS amount_b
-FROM acts r LEFT JOIN decimals d ON d.asset = r.asset"""
+FROM acts"""
 
 
 def xoxno_swap(win):
@@ -828,8 +803,8 @@ def xoxno_swap(win):
     sender, one row per call. Calls made by the XOXNO Lending controller (multiply, swap_debt...)
     are nested in the controller's own call and never appear in the parameters, so they are not
     counted twice. Tokens and amounts live in the route XDR and are not read."""
-    call = (f'"address":\\s*"{XOXNO_ROUTER}"\\s*\\}},\\s*\\{{\\s*"symbol":\\s*"execute_strategy"\\s*\\}},\\s*'
-            f'(?:\\{{\\s*"vec":\\s*\\[\\s*)?\\{{\\s*"address":\\s*"([GC][A-Z2-7]{{55}})"')
+    call = (f'"address":"{XOXNO_ROUTER}"\\}},\\{{"symbol":"execute_strategy"\\}},'
+            f'(?:\\{{"vec":\\[)?\\{{"address":"([GC][A-Z2-7]{{55}})"')
     return f"""WITH ops AS (
   SELECT o.contract_id, o.closed_at, o.transaction_id,
          regexp_extract_all(o.parameters_json_decoded, '{call}', 1) AS senders
