@@ -1,8 +1,8 @@
 """SQL de flujos de liquidez: lo que entra y sale de cada protocolo y pool, en USD.
 
 Una fila por acción que mete o saca capital. Los AMMs salen de result_scf_lp_tx, ya valorizados
-con sus reglas de dos lados. Blend y DeFindex son de un solo token y se valorizan acá con la misma
-regla de precio (último precio de hasta FFILL_DAYS días antes de la acción).
+con sus reglas de dos lados. Blend, XOXNO Lending y DeFindex son de un solo token y se valorizan
+acá con la misma regla de precio (último precio de hasta FFILL_DAYS días antes de la acción).
 
 flow_type separa lo que no se suma con la liquidez depositada:
 - liquidity: add/remove de AMMs, supply/withdraw de Blend, deposit/withdraw de vaults DeFindex.
@@ -10,6 +10,12 @@ flow_type separa lo que no se suma con la liquidez depositada:
 - backstop: depósitos y retiros del backstop de Blend. Su token es el LP de Comet BLND-USDC, que
   no tiene precio y fue atacado el 2026-08-25: se cuenta en acciones y direcciones, sin USD.
 flash_loan no es flujo: se pide y se devuelve en la misma transacción.
+
+XOXNO Lending (verificado el 2026-10-23 con las piernas de cada transacción): multiply es la
+pierna del préstamo (el depósito sale aparte como supply) y migrate_from_blend la deuda que llega
+desde Blend (el colateral también sale como supply). swap_debt cambia una deuda por otra en dos
+piernas sin dirección neta, y flash_position es un flash loan: no son flujo. XOXNO no tiene pool
+en la capa; el pool de la fila es el controller.
 """
 import activity_sql
 import prices_sql
@@ -23,8 +29,13 @@ SINGLE_TOKEN_FLOWS = [
     ('borrow', 'credit', 'out'), ('repay', 'credit', 'in'),
     ('backstop_deposit', 'backstop', 'in'), ('backstop_withdraw', 'backstop', 'out'),
     ('vault_deposit', 'liquidity', 'in'), ('vault_withdraw', 'liquidity', 'out'),
+    # XOXNO Lending legs beyond the ones it shares with Blend.
+    ('close_withdraw', 'liquidity', 'out'), ('swap_collateral_withdraw', 'liquidity', 'out'),
+    ('repay_collateral_withdraw', 'liquidity', 'out'),
+    ('multiply', 'credit', 'out'), ('migrate_from_blend', 'credit', 'out'),
+    ('repay_collateral_repay', 'credit', 'in'), ('repay_collateral_net', 'credit', 'in'),
 ]
-SINGLE_TOKEN_PROTOCOLS = ('blend', 'defindex')
+SINGLE_TOKEN_PROTOCOLS = ('blend', 'xoxno_lending', 'defindex')
 
 
 def single_token_layers():
@@ -61,7 +72,7 @@ WITH tokens AS (
    AND p.day <= s.day AND p.day >= s.day - INTERVAL '{prices_sql.FFILL_DAYS}' DAY
   GROUP BY s.flow_row, s.amount_a, t.decimals
 )
-SELECT s.protocol, s.contract_id, s.pool, s.closed_at, s.day, s.tx_hash, s.user_address,
+SELECT s.protocol, s.contract_id, COALESCE(s.pool, s.contract_id) AS pool, s.closed_at, s.day, s.tx_hash, s.user_address,
        substr(s.user_address, 1, 1) AS address_type, s.action, s.flow_type, s.direction,
        s.token_a AS token, v.token_amount, v.price_usd,
        CASE WHEN s.flow_type = 'backstop' THEN NULL ELSE v.token_amount * v.price_usd END AS usd_value,
