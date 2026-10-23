@@ -4,7 +4,7 @@
 
 **Dashboard:** https://dune.com/paltalabs/stellar-defi
 
-One live dashboard for the whole ecosystem: eight protocols, every address since February 2024, read
+One live dashboard for the whole ecosystem: nine protocols, every address since February 2024, read
 straight from the chain.
 
 - **Users.** Weekly and monthly active addresses across protocols, with new vs returning and growth.
@@ -16,8 +16,8 @@ straight from the chain.
 No self-reported numbers: every figure comes from Soroban events and Stellar operations, refreshes
 daily and passes a daily validation. This repository has all the SQL and the methodology.
 
-Tracked today: Blend, Aquarius, Soroswap (AMM and aggregator), Phoenix, SushiSwap, FxDAO, Etherfuse
-and DeFindex. **Want your protocol tracked?** [Open an issue](https://github.com/paltalabs/stellar-defi-dune-dashboard/issues/new)
+Tracked today: Blend, Aquarius, Soroswap (AMM and aggregator), Phoenix, SushiSwap, FxDAO, Etherfuse,
+DeFindex and XOXNO (Lending and Swap). **Want your protocol tracked?** [Open an issue](https://github.com/paltalabs/stellar-defi-dune-dashboard/issues/new)
 with its name, its contract addresses and what counts as a user action.
 
 *Built by [PaltaLabs](https://paltalabs.io), the team behind Soroswap and DeFindex.*
