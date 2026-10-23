@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8810202
 -- Matview: dune.paltalabs.result_scf_overlap_matrix   cron: 0 9 * * *
--- Última ejecución: 01M357H6521J49DTYFGAC7SSXX
--- Costo: 1.078 cr; filas: 123; engine medium
+-- Última ejecución: 01M5K7D1XJ0PAYHAWG8YNZSJPY
+-- Costo: 1.206 cr; filas: 294; engine medium
 -- Protocol x protocol shared addresses, all time and last 90/28 complete UTC days.
 WITH windows AS (
   SELECT * FROM (VALUES ('all_time', DATE '2024-02-01'),

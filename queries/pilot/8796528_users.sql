@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796528
 -- Matview: dune.paltalabs.result_scf_users   cron: 0 8 * * *
--- Última ejecución: 01M5JZC1VC7K0A6E3F4V7Q30JA
--- Costo: 1.13 cr; filas: 849031; engine medium
+-- Última ejecución: 01M5K79RTEPZH8YMV8RVM5GFAQ
+-- Costo: 1.227 cr; filas: 849288; engine medium
 -- Daily user grain derived from the normalized activity layers. Soroswap is split into
 -- soroswap_amm and soroswap_aggregator by role; Etherfuse SDEX trades do not count as use.
 WITH act AS (
@@ -36,6 +36,14 @@ UNION ALL
 SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_defindex_activity_archive WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 UNION ALL
 SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_defindex_activity WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
+UNION ALL
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_xoxno_lending_activity_archive WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
+UNION ALL
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_xoxno_lending_activity WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
+UNION ALL
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_xoxno_swap_activity_archive WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
+UNION ALL
+SELECT protocol, closed_at, user_address, role, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_xoxno_swap_activity WHERE row_kind = 'activity' AND NOT (protocol = 'etherfuse' AND role = 'trader')
 ), meta AS (
 SELECT protocol, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_blend_activity_archive WHERE row_kind = 'metadata'
 UNION ALL
@@ -68,6 +76,14 @@ UNION ALL
 SELECT protocol, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_defindex_activity_archive WHERE row_kind = 'metadata'
 UNION ALL
 SELECT protocol, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_defindex_activity WHERE row_kind = 'metadata'
+UNION ALL
+SELECT protocol, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_xoxno_lending_activity_archive WHERE row_kind = 'metadata'
+UNION ALL
+SELECT protocol, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_xoxno_lending_activity WHERE row_kind = 'metadata'
+UNION ALL
+SELECT protocol, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_xoxno_swap_activity_archive WHERE row_kind = 'metadata'
+UNION ALL
+SELECT protocol, covered_from, covered_until, refreshed_at, source_layer FROM dune.paltalabs.result_scf_xoxno_swap_activity WHERE row_kind = 'metadata'
 )
 SELECT CASE WHEN protocol = 'soroswap' THEN CASE WHEN role = 'aggregator_user' THEN 'soroswap_aggregator' ELSE 'soroswap_amm' END ELSE protocol END AS protocol, CAST(closed_at AT TIME ZONE 'UTC' AS DATE) AS activity_date, user_address, role,
        MAX(closed_at) AS last_activity_at, 'activity' AS row_kind,
