@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796540
 -- Matview: dune.paltalabs.result_scf_users_validation   cron: 0 10 * * *
--- Última ejecución: 01M5JYKZ04BK1W9RW76TGFMMNY
--- Costo: 1.123 cr; filas: 13; engine medium
+-- Última ejecución: 01M5K7EJFPY13B5PYSV1J14553
+-- Costo: 1.087 cr; filas: 13; engine medium
 WITH users AS (SELECT * FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity'),
 duplicate_keys AS (
   SELECT protocol, activity_date, user_address, role, COUNT(*) AS n
@@ -15,7 +15,7 @@ SELECT 'invalid_role_or_date', COUNT(*) FROM users WHERE role IS NULL OR activit
 UNION ALL
 SELECT 'out_of_coverage', COUNT(*) FROM users WHERE activity_date < covered_from OR activity_date >= covered_until
 UNION ALL
-SELECT 'missing_protocol_metadata', 9 - COUNT(DISTINCT protocol)
+SELECT 'missing_protocol_metadata', 11 - COUNT(DISTINCT protocol)
 FROM dune.paltalabs.result_scf_users WHERE row_kind = 'metadata'
 UNION ALL
 SELECT 'archive_live_gap', COUNT(*) FROM (
@@ -81,4 +81,12 @@ SELECT 1 AS one FROM dune.paltalabs.result_scf_sushiswap_activity WHERE row_kind
 UNION ALL
 SELECT 1 AS one FROM dune.paltalabs.result_scf_defindex_activity_archive WHERE row_kind = 'activity' AND role = 'lp'
 UNION ALL
-SELECT 1 AS one FROM dune.paltalabs.result_scf_defindex_activity WHERE row_kind = 'activity' AND role = 'lp') AS x))
+SELECT 1 AS one FROM dune.paltalabs.result_scf_defindex_activity WHERE row_kind = 'activity' AND role = 'lp'
+UNION ALL
+SELECT 1 AS one FROM dune.paltalabs.result_scf_xoxno_lending_activity_archive WHERE row_kind = 'activity' AND role = 'lp'
+UNION ALL
+SELECT 1 AS one FROM dune.paltalabs.result_scf_xoxno_lending_activity WHERE row_kind = 'activity' AND role = 'lp'
+UNION ALL
+SELECT 1 AS one FROM dune.paltalabs.result_scf_xoxno_swap_activity_archive WHERE row_kind = 'activity' AND role = 'lp'
+UNION ALL
+SELECT 1 AS one FROM dune.paltalabs.result_scf_xoxno_swap_activity WHERE row_kind = 'activity' AND role = 'lp') AS x))

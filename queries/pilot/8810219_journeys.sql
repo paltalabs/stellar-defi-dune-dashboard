@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8810219
 -- Matview: dune.paltalabs.result_scf_journeys   cron: 0 9 * * *
--- Última ejecución: 01M357M762KE85G7TPRYXRV1GT
--- Costo: 1.061 cr; filas: 52; engine medium
+-- Última ejecución: 01M5K7DT40YP4D5VZSC0QWDXVR
+-- Costo: 1.073 cr; filas: 87; engine medium
 -- First protocol -> second protocol per address (by first day seen). 'none' = never used a second one.
 WITH firsts AS (SELECT user_address, protocol, MIN(activity_date) AS first_seen
   FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity' AND activity_date < CURRENT_DATE GROUP BY 1, 2),

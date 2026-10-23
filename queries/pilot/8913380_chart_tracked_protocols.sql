@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8913380
 -- Matview: None   cron: None
--- Última ejecución: 01M5JZCP1VP7FPK8DS8PCA350P
--- Costo: 0.276 cr; filas: 8; engine medium
+-- Última ejecución: 01M5K7FJDQW9STA8WD494TGRE1
+-- Costo: 0.289 cr; filas: 10; engine medium
 -- Chart source: the protocols this dashboard tracks, with what is measured and current coverage.
 -- One row per protocol; Soroswap is its total (unique addresses across the AMM and the aggregator).
 WITH info (protocol, name, category, measured, ord) AS (VALUES
@@ -12,7 +12,9 @@ WITH info (protocol, name, category, measured, ord) AS (VALUES
   ('sushiswap', 'SushiSwap', 'AMM (concentrated liquidity)', 'Swaps, liquidity minted and collected (since March 2026)', 5),
   ('fxdao', 'FxDAO', 'CDP stablecoins', 'Vault operations, redemptions, liquidations and locking pool', 6),
   ('etherfuse', 'Etherfuse', 'Tokenized bonds (classic assets)', 'Mints, redeems and transfers of its stablebonds; SDEX trading of the bonds is not counted', 7),
-  ('defindex', 'DeFindex', 'Yield vaults', 'Deposits and withdrawals in DeFindex vaults (since May 2025)', 8)
+  ('defindex', 'DeFindex', 'Yield vaults', 'Deposits and withdrawals in DeFindex vaults (since May 2025)', 8),
+  ('xoxno_lending', 'XOXNO Lending', 'Lending', 'Supply, withdraw, borrow, repay, multiply and collateral/debt swaps, flash loans, liquidations, position NFT transfers (since August 2026)', 9),
+  ('xoxno_swap', 'XOXNO Swap', 'Aggregator', 'Swaps through the XOXNO router, called directly or from batch contracts; swaps inside XOXNO Lending strategies are not counted (since July 2026)', 10)
 ), contracts AS (
   SELECT protocol, COUNT(DISTINCT contract_id) AS registry_contracts FROM dune.paltalabs.result_scf_contracts GROUP BY 1
   UNION ALL
