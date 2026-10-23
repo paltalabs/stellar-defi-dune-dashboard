@@ -202,3 +202,47 @@ Hasta 2026-10-23 la capa leía el primer valor en los dos y guardaba shares en l
 guarda el LP de Comet que sale. El LP de Comet (`CAS3FL6TLZ…`) no tiene precio: el backstop no suma USD. El
 2026-08-25 el pool Comet BLND-USDC fue atacado y el backstop dejó de recibir depósitos desde el
 2026-09-10; los montos de esas semanas no son comparables con los de antes.
+
+## Flujos de liquidez y migraciones
+
+Generador: `scripts/flows_sql.py`. Tres matviews, todas sobre las capas y `result_scf_lp_tx`, sin
+leer tablas crudas:
+
+- `result_scf_flow_tx`: una fila por acción que mete o saca capital, con `direction` (`in`/`out`),
+  `flow_type`, `address_type` (G/C), `token_amount`, `price_usd` y `usd_value`. Los AMMs vienen de
+  `result_scf_lp_tx` (add = in, remove = out) con sus reglas de dos lados. Blend, XOXNO Lending y
+  DeFindex son de un solo token: monto corregido por los decimales del token y último precio de
+  hasta 7 días antes (`usd_method = 'single'`).
+- `result_scf_flows_periods`: entradas, salidas y neto por semana y mes, en tres niveles: pool,
+  protocolo (`pool = 'all'`) y ecosistema (`protocol = 'all protocols'`). G y C en filas aparte; el
+  ecosistema cuenta solo G, porque las estrategias de DeFindex (C) depositan en Blend lo que ya
+  entró a DeFindex y sumar los dos contaría dos veces lo mismo.
+- `result_scf_migrations`: para cada salida de liquidez de una G en el protocolo A, la primera
+  entrada de la misma G en un protocolo B distinto dentro de 7 días. Cada entrada cuenta una sola
+  vez, para la salida más cercana antes de ella. El monto que pudo migrar es el menor de los dos
+  lados. `same_tx` marca las que pasan en una sola transacción (una app que saca y deposita en un
+  paso; casi todas las de Blend a DeFindex). Las salidas de los últimos 7 días esperan a que se
+  cierre su ventana. Solo G: un contrato que mueve fondos es una estrategia o un router.
+
+| `flow_type` | Entra | Sale |
+|---|---|---|
+| `liquidity` | add de AMMs; `supply`, `supply_collateral` (Blend, XOXNO); `vault_deposit` | remove de AMMs; `withdraw`, `withdraw_collateral`; XOXNO `close_withdraw`, `swap_collateral_withdraw`, `repay_collateral_withdraw`; `vault_withdraw` |
+| `credit` | `repay`; XOXNO `repay_collateral_repay`, `repay_collateral_net` | `borrow`; XOXNO `multiply` (la pierna del préstamo), `migrate_from_blend` (la deuda que llega de Blend) |
+| `backstop` | `backstop_deposit` | `backstop_withdraw` |
+
+No son flujo: `flash_loan` y `flash_position` (se piden y se devuelven en la misma transacción),
+`swap_debt` de XOXNO (cambia una deuda por otra en dos piernas, sin dirección neta), los swaps y
+las liquidaciones. El backstop de Blend se cuenta en acciones y direcciones, sin USD
+(`valuation = 'excluded'`): su token es el LP de Comet BLND-USDC, sin precio confiable, y el pool
+Comet fue atacado el 2026-08-25. XOXNO no tiene pool en la capa; el pool de sus filas es el
+controller.
+
+**Los flujos no son TVL.** Las liquidaciones (`fill_auction`) se llevan colateral sin un
+`withdraw`, el interés se acumula sin ninguna acción y la deuda impaga queda en los pools. La suma
+de los netos no es lo que un protocolo tiene hoy. Una ballena puede pasar su posición entre dos
+wallets propias (76,7 M de XLM en Blend el 2026-07-24): sale y entra lo mismo el mismo día.
+
+**Chequeos** en `result_scf_users_validation` (`flows_sql.validation_checks()`):
+`flow_tx_vs_layers` (filas de flujo = filas de las capas con esas acciones + filas add/remove de
+`lp_tx`), `flows_periods_vs_tx`, `migrations_out_of_window`, `migrations_reused_deposits` y
+`flow_price_coverage` (protocolos con menos de 95% de sus flujos de los últimos 90 días con precio).

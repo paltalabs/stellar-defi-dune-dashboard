@@ -198,4 +198,116 @@ SELECT 'migrations_reused_deposits', COUNT(*) - COUNT(DISTINCT user_address || t
 
 
 
+# ---- chart sources -------------------------------------------------------------------------------
+# Matview executions only persist a row count, so each chart reads its matview with its own SELECT.
+
+def chart_flows_ecosystem(grain):
+    return f"""-- Chart source: liquidity in, out and net USD of the ecosystem per complete calendar {grain}, wallets (G) only.
+-- usd_out_negative draws withdrawals below the axis.
+SELECT period_start, usd_in, -usd_out AS usd_out_negative, usd_out, usd_net, addresses, addresses_in, addresses_out
+FROM {FLOWS_PERIODS}
+WHERE grain = '{grain}' AND is_complete AND protocol = 'all protocols' AND pool = 'all' AND flow_type = 'liquidity'
+  AND address_type = 'G' AND period_start >= {activity_sql.chart_since(grain)}
+ORDER BY period_start
+"""
+
+
+def chart_flows_protocol():
+    return f"""-- Chart source: net liquidity flow per protocol and complete calendar month, wallets (G) only.
+SELECT period_start, protocol, usd_in, usd_out, usd_net, addresses
+FROM {FLOWS_PERIODS}
+WHERE grain = 'month' AND is_complete AND protocol <> 'all protocols' AND pool = 'all' AND flow_type = 'liquidity'
+  AND address_type = 'G' AND period_start >= {activity_sql.chart_since('month')}
+ORDER BY period_start, protocol
+"""
+
+
+def chart_flows_pools():
+    return f"""-- Chart source: top 20 pools and vaults by liquidity moved (in + out), last 90 complete days, G and C.
+WITH p AS (
+  SELECT protocol, pool,
+         SUM(usd_value) FILTER (WHERE direction = 'in') AS usd_in,
+         SUM(usd_value) FILTER (WHERE direction = 'out') AS usd_out,
+         COUNT(*) AS actions, COUNT(DISTINCT user_address) AS addresses,
+         COUNT(DISTINCT CASE WHEN address_type = 'G' THEN user_address END) AS g_addresses
+  FROM {FLOW_TX}
+  WHERE flow_type = 'liquidity' AND day >= CURRENT_DATE - INTERVAL '90' DAY AND day < CURRENT_DATE
+  GROUP BY 1, 2
+)
+SELECT protocol, pool, usd_in, usd_out, COALESCE(usd_in, 0) - COALESCE(usd_out, 0) AS usd_net,
+       COALESCE(usd_in, 0) + COALESCE(usd_out, 0) AS usd_moved, actions, addresses, g_addresses
+FROM p ORDER BY usd_moved DESC LIMIT 20
+"""
+
+
+def chart_credit():
+    return f"""-- Chart source: borrowed and repaid USD per lending protocol and complete calendar month, G and C.
+SELECT period_start, protocol, SUM(usd_out) AS usd_borrowed, SUM(usd_in) AS usd_repaid,
+       COALESCE(SUM(usd_in), 0) - COALESCE(SUM(usd_out), 0) AS usd_net_repaid,
+       SUM(addresses) AS addresses
+FROM {FLOWS_PERIODS}
+WHERE grain = 'month' AND is_complete AND protocol <> 'all protocols' AND pool = 'all' AND flow_type = 'credit'
+GROUP BY 1, 2 ORDER BY 1, 2
+"""
+
+
+def chart_migration_pairs():
+    return f"""-- Chart source: liquidity migrations between protocols ({MIGRATION_DAYS}-day window), all time, wallets (G).
+SELECT from_protocol, to_protocol, COUNT(*) AS migrations, COUNT(DISTINCT user_address) AS addresses,
+       COUNT_IF(NOT same_tx) AS two_step, COUNT_IF(same_tx) AS same_transaction,
+       SUM(usd_migrated) AS usd_migrated, SUM(usd_migrated) FILTER (WHERE NOT same_tx) AS usd_two_step,
+       approx_percentile(seconds_between, 0.5) / 3600.0 AS median_hours,
+       MIN(out_day) AS first_day, MAX(out_day) AS last_day
+FROM {MIGRATIONS}
+GROUP BY 1, 2 ORDER BY migrations DESC
+"""
+
+
+def chart_migrations_monthly():
+    return f"""-- Chart source: migrations per complete calendar month, split by how they happened, wallets (G).
+-- same transaction: an app withdrew and deposited in one step; two steps: the wallet did it in two transactions.
+SELECT CAST(date_trunc('month', out_day) AS DATE) AS period_start,
+       CASE WHEN same_tx THEN 'same transaction (app)' ELSE 'two steps (wallet)' END AS kind,
+       COUNT(*) AS migrations, COUNT(DISTINCT user_address) AS addresses, SUM(usd_migrated) AS usd_migrated
+FROM {MIGRATIONS}
+WHERE out_day < CAST(date_trunc('month', CURRENT_DATE) AS DATE)
+GROUP BY 1, 2 ORDER BY 1, 2
+"""
+
+
+def chart_migrations_two_step():
+    return f"""-- Chart source: two-step migrations per complete calendar month and route, top 6 routes by count, rest as other.
+WITH m AS (
+  SELECT CAST(date_trunc('month', out_day) AS DATE) AS period_start, from_protocol || ' > ' || to_protocol AS route, user_address, usd_migrated
+  FROM {MIGRATIONS}
+  WHERE NOT same_tx AND out_day < CAST(date_trunc('month', CURRENT_DATE) AS DATE)
+), top AS (
+  SELECT route FROM m GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 6
+)
+SELECT period_start, CASE WHEN route IN (SELECT route FROM top) THEN route ELSE 'other' END AS route,
+       COUNT(*) AS migrations, COUNT(DISTINCT user_address) AS addresses, SUM(usd_migrated) AS usd_migrated
+FROM m GROUP BY 1, 2 ORDER BY 1, 2
+"""
+
+
+def chart_flow_coverage():
+    return f"""-- Chart source: share of flow actions valued in USD per protocol and flow type, last 90 complete days.
+SELECT protocol, flow_type, COUNT(*) AS actions, COUNT_IF(valuation = 'priced') AS priced,
+       COUNT_IF(valuation = 'unpriced') AS unpriced, COUNT_IF(valuation IN ('excluded', 'no_tokens')) AS not_valued,
+       CAST(COUNT_IF(valuation = 'priced') AS DOUBLE) / NULLIF(COUNT_IF(valuation NOT IN ('excluded', 'no_tokens')), 0) AS priced_share
+FROM {FLOW_TX}
+WHERE day >= CURRENT_DATE - INTERVAL '90' DAY AND day < CURRENT_DATE
+GROUP BY 1, 2 ORDER BY 1, 2
+"""
+
+
 METRICS = {'flow_tx': flow_tx, 'flows_periods': flows_periods, 'migrations': migrations}
+CHARTS = {'chart_flows_weekly': lambda: chart_flows_ecosystem('week'),
+          'chart_flows_monthly': lambda: chart_flows_ecosystem('month'),
+          'chart_flows_protocol': chart_flows_protocol,
+          'chart_flows_pools': chart_flows_pools,
+          'chart_credit': chart_credit,
+          'chart_migration_pairs': chart_migration_pairs,
+          'chart_migrations_monthly': chart_migrations_monthly,
+          'chart_migrations_two_step': chart_migrations_two_step,
+          'chart_flow_coverage': chart_flow_coverage}

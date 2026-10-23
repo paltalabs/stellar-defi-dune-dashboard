@@ -12,6 +12,8 @@ straight from the chain.
   those users go next.
 - **Liquidity.** Who provides liquidity in Stellar's AMMs, how many dollars come in and out, and the
   largest LPs and moves.
+- **Flows and migrations.** How much liquidity enters and leaves each protocol, pool and vault,
+  what is borrowed and repaid, and which wallets move their liquidity from one protocol to another.
 
 No self-reported numbers: every figure comes from Soroban events and Stellar operations, refreshes
 daily and passes a daily validation. This repository has all the SQL and the methodology.
@@ -43,6 +45,16 @@ with its name, its contract addresses and what counts as a user action.
 - Every add and remove liquidity action in the AMMs, valued in USD with an on-chain daily price table
 - Active LPs per week and month, top LPs, USD added, removed and net flow per AMM
 - Valuation coverage per protocol
+
+## Liquidity flows and migrations
+
+- Liquidity in, out and net per week and month for the ecosystem, each protocol and each pool or
+  vault: AMM liquidity, Blend and XOXNO Lending supply and withdrawals, DeFindex vault deposits and
+  withdrawals. Wallets (G) and contracts (C) are kept apart; the ecosystem counts wallets only
+- Borrowed and repaid in Blend and XOXNO Lending, apart from liquidity
+- Migrations: a wallet withdraws from one protocol and deposits in another within 7 days, split
+  into moves made by an app in one transaction and moves the wallet made in two steps
+- Valuation coverage of the flows per protocol
 
 ## How it works
 
