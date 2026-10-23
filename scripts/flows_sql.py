@@ -22,6 +22,9 @@ import prices_sql
 
 lit = activity_sql.lit
 FLOW_TX = 'dune.paltalabs.result_scf_flow_tx'
+FLOWS_PERIODS = 'dune.paltalabs.result_scf_flows_periods'
+MIGRATIONS = 'dune.paltalabs.result_scf_migrations'
+MIN_PRICED_SHARE = 0.95       # flow_price_coverage fails a protocol under this share, last 90 days
 # (layer action, flow_type, direction) for the single-token protocols.
 SINGLE_TOKEN_FLOWS = [
     ('supply', 'liquidity', 'in'), ('supply_collateral', 'liquidity', 'in'),
@@ -131,8 +134,10 @@ def migrations():
     the same address in another protocol B within MIGRATION_DAYS after it. Only G addresses: a
     contract that moves funds between protocols is a strategy or a router, not a user choosing a
     protocol (3 contract migrations in 30 days against 1.179 of wallets, 2026-10-22). The amount
-    that could have migrated is the smaller of the two sides. Withdrawals newer than the window
-    are left out until it closes."""
+    that could have migrated is the smaller of the two sides. A deposit counts once, for the
+    closest withdrawal before it: without that, 429 SushiSwap -> Aquarius matches of 6 addresses
+    reused the same deposits (2026-10-23). Withdrawals newer than the window are left out until
+    it closes."""
     return f"""-- Liquidity migrations: a wallet withdraws from one protocol and deposits in another within {MIGRATION_DAYS} days.
 WITH f AS (
   SELECT protocol, pool, closed_at, tx_hash, user_address, direction, usd_value
@@ -151,6 +156,10 @@ matched AS (
   JOIN ins i ON i.user_address = o.user_address AND i.protocol <> o.protocol
    AND i.closed_at >= o.closed_at AND i.closed_at <= o.closed_at + INTERVAL '{MIGRATION_DAYS}' DAY
   GROUP BY 1, 2, 3, 4, 5, 6
+), closest AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY user_address, first_in.protocol, first_in.tx_hash, first_in.closed_at
+                               ORDER BY out_at DESC, out_tx DESC) AS rn
+  FROM matched
 )
 SELECT from_protocol, from_pool, first_in.protocol AS to_protocol, first_in.pool AS to_pool, user_address,
        out_at, first_in.closed_at AS in_at, CAST(out_at AT TIME ZONE 'UTC' AS DATE) AS out_day,
@@ -158,8 +167,35 @@ SELECT from_protocol, from_pool, first_in.protocol AS to_protocol, first_in.pool
        date_diff('second', out_at, first_in.closed_at) AS seconds_between,
        usd_out, first_in.usd_value AS usd_in, LEAST(usd_out, first_in.usd_value) AS usd_migrated,
        CURRENT_TIMESTAMP AS refreshed_at
-FROM matched
+FROM closest WHERE rn = 1
 """
+
+
+def validation_checks():
+    """Checks for result_scf_users_validation, failures = 0 when they pass. Price coverage counts
+    the protocols whose priced share of the last 90 days falls under MIN_PRICED_SHARE."""
+    single_rows = single_token_layers().replace(
+        'SELECT protocol, contract_id, closed_at, tx_hash, user_address, action, pool, token_a, amount_a', 'SELECT 1 AS one')
+    return f"""SELECT 'flow_tx_vs_layers', ABS((SELECT COUNT(*) FROM {FLOW_TX})
+  - (SELECT COUNT(*) FROM ({single_rows}) AS x)
+  - (SELECT COUNT(*) FROM {prices_sql.LP_TX} WHERE direction IN ('add', 'remove')))
+UNION ALL
+SELECT 'flow_price_coverage', COUNT(*) FROM (
+  SELECT protocol FROM {FLOW_TX}
+  WHERE day >= CURRENT_DATE - INTERVAL '90' DAY AND valuation NOT IN ('excluded', 'no_tokens')
+  GROUP BY 1 HAVING CAST(COUNT_IF(valuation = 'priced') AS DOUBLE) / COUNT(*) < {MIN_PRICED_SHARE}
+)
+UNION ALL
+SELECT 'flows_periods_vs_tx', ABS((SELECT SUM(actions_in + actions_out) FROM {FLOWS_PERIODS}
+  WHERE grain = 'month' AND pool = 'all' AND protocol <> 'all protocols')
+  - (SELECT COUNT(*) FROM {FLOW_TX} WHERE day < CURRENT_DATE))
+UNION ALL
+SELECT 'migrations_out_of_window', COUNT(*) FROM {MIGRATIONS}
+WHERE from_protocol = to_protocol OR seconds_between < 0 OR seconds_between > {MIGRATION_DAYS} * 86400
+   OR user_address NOT LIKE 'G%'
+UNION ALL
+SELECT 'migrations_reused_deposits', COUNT(*) - COUNT(DISTINCT user_address || to_protocol || in_tx || CAST(in_at AS VARCHAR)) FROM {MIGRATIONS}"""
+
 
 
 METRICS = {'flow_tx': flow_tx, 'flows_periods': flows_periods, 'migrations': migrations}

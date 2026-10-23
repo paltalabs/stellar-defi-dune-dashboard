@@ -302,6 +302,7 @@ def validation():
     # list did the same job at 45 KB of SQL.
     registered = len(set(activity_sql.registered_literals()))
     import prices_sql
+    import flows_sql
     known_tokens = activity_sql.lit(t['token'] for t in prices_sql.tokens())
     lp_rows = activity_sql.all_activity('1 AS one', "row_kind = 'activity' AND role = 'lp'")
     return f"""WITH users AS (SELECT * FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity'),
@@ -354,6 +355,8 @@ SELECT 'unknown_tokens', COUNT(*) FROM (
 UNION ALL
 SELECT 'lp_tx_vs_layers', ABS((SELECT COUNT(*) FROM dune.paltalabs.result_scf_lp_tx)
   - (SELECT COUNT(*) FROM ({lp_rows}) AS x))
+UNION ALL
+{flows_sql.validation_checks()}
 """
 
 

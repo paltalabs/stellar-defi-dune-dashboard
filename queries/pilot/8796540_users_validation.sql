@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8796540
 -- Matview: dune.paltalabs.result_scf_users_validation   cron: 0 10 * * *
--- Última ejecución: 01M5K7EJFPY13B5PYSV1J14553
--- Costo: 1.087 cr; filas: 13; engine medium
+-- Última ejecución: 01M5MC7V9W676DR23K7HC9RM42
+-- Costo: 1.078 cr; filas: 18; engine medium
 WITH users AS (SELECT * FROM dune.paltalabs.result_scf_users WHERE row_kind = 'activity'),
 duplicate_keys AS (
   SELECT protocol, activity_date, user_address, role, COUNT(*) AS n
@@ -90,3 +90,33 @@ UNION ALL
 SELECT 1 AS one FROM dune.paltalabs.result_scf_xoxno_swap_activity_archive WHERE row_kind = 'activity' AND role = 'lp'
 UNION ALL
 SELECT 1 AS one FROM dune.paltalabs.result_scf_xoxno_swap_activity WHERE row_kind = 'activity' AND role = 'lp') AS x))
+UNION ALL
+SELECT 'flow_tx_vs_layers', ABS((SELECT COUNT(*) FROM dune.paltalabs.result_scf_flow_tx)
+  - (SELECT COUNT(*) FROM (SELECT 1 AS one FROM dune.paltalabs.result_scf_blend_activity_archive WHERE row_kind = 'activity' AND protocol IN ('blend', 'xoxno_lending', 'defindex') AND action IN ('supply', 'supply_collateral', 'withdraw', 'withdraw_collateral', 'borrow', 'repay', 'backstop_deposit', 'backstop_withdraw', 'vault_deposit', 'vault_withdraw', 'close_withdraw', 'swap_collateral_withdraw', 'repay_collateral_withdraw', 'multiply', 'migrate_from_blend', 'repay_collateral_repay', 'repay_collateral_net')
+UNION ALL
+SELECT 1 AS one FROM dune.paltalabs.result_scf_blend_activity WHERE row_kind = 'activity' AND protocol IN ('blend', 'xoxno_lending', 'defindex') AND action IN ('supply', 'supply_collateral', 'withdraw', 'withdraw_collateral', 'borrow', 'repay', 'backstop_deposit', 'backstop_withdraw', 'vault_deposit', 'vault_withdraw', 'close_withdraw', 'swap_collateral_withdraw', 'repay_collateral_withdraw', 'multiply', 'migrate_from_blend', 'repay_collateral_repay', 'repay_collateral_net')
+UNION ALL
+SELECT 1 AS one FROM dune.paltalabs.result_scf_xoxno_lending_activity_archive WHERE row_kind = 'activity' AND protocol IN ('blend', 'xoxno_lending', 'defindex') AND action IN ('supply', 'supply_collateral', 'withdraw', 'withdraw_collateral', 'borrow', 'repay', 'backstop_deposit', 'backstop_withdraw', 'vault_deposit', 'vault_withdraw', 'close_withdraw', 'swap_collateral_withdraw', 'repay_collateral_withdraw', 'multiply', 'migrate_from_blend', 'repay_collateral_repay', 'repay_collateral_net')
+UNION ALL
+SELECT 1 AS one FROM dune.paltalabs.result_scf_xoxno_lending_activity WHERE row_kind = 'activity' AND protocol IN ('blend', 'xoxno_lending', 'defindex') AND action IN ('supply', 'supply_collateral', 'withdraw', 'withdraw_collateral', 'borrow', 'repay', 'backstop_deposit', 'backstop_withdraw', 'vault_deposit', 'vault_withdraw', 'close_withdraw', 'swap_collateral_withdraw', 'repay_collateral_withdraw', 'multiply', 'migrate_from_blend', 'repay_collateral_repay', 'repay_collateral_net')
+UNION ALL
+SELECT 1 AS one FROM dune.paltalabs.result_scf_defindex_activity_archive WHERE row_kind = 'activity' AND protocol IN ('blend', 'xoxno_lending', 'defindex') AND action IN ('supply', 'supply_collateral', 'withdraw', 'withdraw_collateral', 'borrow', 'repay', 'backstop_deposit', 'backstop_withdraw', 'vault_deposit', 'vault_withdraw', 'close_withdraw', 'swap_collateral_withdraw', 'repay_collateral_withdraw', 'multiply', 'migrate_from_blend', 'repay_collateral_repay', 'repay_collateral_net')
+UNION ALL
+SELECT 1 AS one FROM dune.paltalabs.result_scf_defindex_activity WHERE row_kind = 'activity' AND protocol IN ('blend', 'xoxno_lending', 'defindex') AND action IN ('supply', 'supply_collateral', 'withdraw', 'withdraw_collateral', 'borrow', 'repay', 'backstop_deposit', 'backstop_withdraw', 'vault_deposit', 'vault_withdraw', 'close_withdraw', 'swap_collateral_withdraw', 'repay_collateral_withdraw', 'multiply', 'migrate_from_blend', 'repay_collateral_repay', 'repay_collateral_net')) AS x)
+  - (SELECT COUNT(*) FROM dune.paltalabs.result_scf_lp_tx WHERE direction IN ('add', 'remove')))
+UNION ALL
+SELECT 'flow_price_coverage', COUNT(*) FROM (
+  SELECT protocol FROM dune.paltalabs.result_scf_flow_tx
+  WHERE day >= CURRENT_DATE - INTERVAL '90' DAY AND valuation NOT IN ('excluded', 'no_tokens')
+  GROUP BY 1 HAVING CAST(COUNT_IF(valuation = 'priced') AS DOUBLE) / COUNT(*) < 0.95
+)
+UNION ALL
+SELECT 'flows_periods_vs_tx', ABS((SELECT SUM(actions_in + actions_out) FROM dune.paltalabs.result_scf_flows_periods
+  WHERE grain = 'month' AND pool = 'all' AND protocol <> 'all protocols')
+  - (SELECT COUNT(*) FROM dune.paltalabs.result_scf_flow_tx WHERE day < CURRENT_DATE))
+UNION ALL
+SELECT 'migrations_out_of_window', COUNT(*) FROM dune.paltalabs.result_scf_migrations
+WHERE from_protocol = to_protocol OR seconds_between < 0 OR seconds_between > 7 * 86400
+   OR user_address NOT LIKE 'G%'
+UNION ALL
+SELECT 'migrations_reused_deposits', COUNT(*) - COUNT(DISTINCT user_address || to_protocol || in_tx || CAST(in_at AS VARCHAR)) FROM dune.paltalabs.result_scf_migrations

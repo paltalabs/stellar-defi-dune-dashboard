@@ -1,7 +1,7 @@
 -- Query: https://dune.com/queries/8996597
 -- Matview: dune.paltalabs.result_scf_migrations   cron: 30 9 * * *
--- Última ejecución: 01M5MBM8C65W502FTTA2S9TJMY
--- Costo: 1.112 cr; filas: 26096; engine medium
+-- Última ejecución: 01M5MC7E08VRNQTY0G5QY39YS3
+-- Costo: 1.188 cr; filas: 20042; engine medium
 -- Liquidity migrations: a wallet withdraws from one protocol and deposits in another within 7 days.
 WITH f AS (
   SELECT protocol, pool, closed_at, tx_hash, user_address, direction, usd_value
@@ -20,6 +20,10 @@ matched AS (
   JOIN ins i ON i.user_address = o.user_address AND i.protocol <> o.protocol
    AND i.closed_at >= o.closed_at AND i.closed_at <= o.closed_at + INTERVAL '7' DAY
   GROUP BY 1, 2, 3, 4, 5, 6
+), closest AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY user_address, first_in.protocol, first_in.tx_hash, first_in.closed_at
+                               ORDER BY out_at DESC, out_tx DESC) AS rn
+  FROM matched
 )
 SELECT from_protocol, from_pool, first_in.protocol AS to_protocol, first_in.pool AS to_pool, user_address,
        out_at, first_in.closed_at AS in_at, CAST(out_at AT TIME ZONE 'UTC' AS DATE) AS out_day,
@@ -27,4 +31,4 @@ SELECT from_protocol, from_pool, first_in.protocol AS to_protocol, first_in.pool
        date_diff('second', out_at, first_in.closed_at) AS seconds_between,
        usd_out, first_in.usd_value AS usd_in, LEAST(usd_out, first_in.usd_value) AS usd_migrated,
        CURRENT_TIMESTAMP AS refreshed_at
-FROM matched
+FROM closest WHERE rn = 1
