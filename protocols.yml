@@ -175,8 +175,8 @@ protocols:
       pool: CBXRNDQMAJFG4VUKMKFEMFS75UUXE2SPSNV4LEEFCSNBCN66PYRWBKXO
       position_nft: CAWCSG77AY2W24QZ6ZXLHZU4UXEFHZBM6EI4A4IF7JB5CTY4XND3TI6C
     roles:
-      lender: [supply, withdraw, swap_collateral, repay_with_collateral, close]
-      borrower: [borrow, repay, multiply, swap_debt, repay_with_collateral, migrate_from_blend, flash_position, flash_loan]
+      lender: [supply, withdraw, swap_collateral_withdraw, repay_collateral_withdraw, close_withdraw]
+      borrower: [borrow, repay, multiply, swap_debt, repay_collateral_repay, repay_collateral_net, migrate_from_blend, flash_position, flash_loan]
       liquidator: [liquidate]
     not_counted: liquidated accounts (LiqRepay, LiqSeize, LiqCredit legs) and ParamUpd legs
 
